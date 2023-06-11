@@ -1,7 +1,5 @@
 pub mod op_codes;
 
-use op_codes::OpCodes;
-
 pub struct CPU {
   pub registers: Registers,
   pub program: Vec<u8>
@@ -40,7 +38,7 @@ impl CPU {
       0
     };
 
-    OpCodes::decode(self, op_code);
+    self.decode(op_code);
 
     self.registers.pc += 1;
   }
