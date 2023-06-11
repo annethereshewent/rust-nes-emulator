@@ -2,7 +2,7 @@ pub mod op_codes;
 
 pub struct CPU {
   pub registers: Registers,
-  pub program: Vec<u8>
+  pub memory: [u8; 0xffff]
 }
 
 pub struct Registers {
@@ -27,23 +27,35 @@ impl CPU {
         x: 0,
         y: 0
       },
-      program: rom
+      memory: [0; 0xffff]
     }
   }
 
-  pub fn tick(&mut self) {
-    let op_code = if self.program.len() > 0 {
-      self.program[self.registers.pc as usize]
-    } else {
-      0
-    };
-
-    self.decode(op_code);
-
-    self.registers.pc += 1;
+  pub fn mem_read(&self, address: u16) -> u8 {
+    self.memory[address as usize]
   }
 
-  pub fn cycle(&mut self, cycles: u16) {
+  pub fn mem_read_u16(&self, address: u16) -> u16 {
+    let low_byte = self.mem_read(address) as u16;
+    let high_byte = self.mem_read(address + 1) as u16;
+
+    (high_byte << 8) | low_byte
+  }
+
+  pub fn load_game(&mut self, rom: Vec<u8>) {
+    self.memory[0x8000 .. (0x8000 + rom.len())].copy_from_slice(&rom);
+    self.registers.pc = 0x8000;
+  }
+
+  pub fn tick(&mut self) {
+    let op_code = self.memory[self.registers.pc as usize];
+
+    self.registers.pc += 1;
+
+    self.decode(op_code);
+  }
+
+  pub fn cycle(&mut self, _cycles: u16) {
     // TODO
   }
 }
