@@ -8,6 +8,10 @@ fn main() {
 
   let args: Vec<String> = env::args().collect();
 
+  if args.len() != 2 {
+    panic!("Please specify a filename.");
+  }
+
   let filepath = &args[1];
 
   nes.run(filepath);

@@ -12,12 +12,15 @@ impl CPU {
   }
 
   fn inx(&mut self) {
+    println!("inx got called!");
     self.registers.x += 1;
 
     self.set_zero_and_negative_flags(self.registers.x);
   }
 
   fn lda(&mut self) {
+    println!("lda got called!");
+
     let val = self.program[self.registers.pc as usize];
 
     self.registers.pc += 1;
@@ -28,6 +31,8 @@ impl CPU {
   }
 
   fn tax(&mut self) {
+    println!("tax got called!");
+
     self.registers.x = self.registers.a;
 
     self.set_zero_and_negative_flags(self.registers.x);
