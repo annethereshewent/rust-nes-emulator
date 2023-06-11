@@ -16,12 +16,16 @@ impl NES {
 
   pub fn run(&mut self, filepath: &String) {
     println!("the filepath is {}", filepath);
-    let bytes: Vec<u8> = std::fs::read(filepath).unwrap();
+    let bytes: Vec<u8> = fs::read(filepath).unwrap();
 
     let mut cpu = CPU::new(bytes);
 
-    for n in 1..100 {
-      cpu.tick();
+    for _n in 1..100 {
+      if self.is_running {
+        cpu.tick();
+      } else {
+        break;
+      }
     }
   }
 }

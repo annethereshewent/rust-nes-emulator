@@ -1,4 +1,6 @@
+pub mod op_codes;
 
+use op_codes::OpCodes;
 
 pub struct CPU {
   pub registers: Registers,
@@ -8,12 +10,14 @@ pub struct CPU {
 pub struct Registers {
   pub a: u8,
   pub pc: u16,
+  pub x: u8,
+  pub y: u8,
   pub p: u8
 }
 
 impl CPU {
   pub fn new(rom: Vec<u8>) -> Self {
-    if (rom.len() == 0) {
+    if rom.len() == 0 {
       panic!("invalid file specified")
     }
 
@@ -21,7 +25,9 @@ impl CPU {
       registers: Registers {
         a: 0,
         pc: 0,
-        p: 0
+        p: 0,
+        x: 0,
+        y: 0
       },
       program: rom
     }
@@ -34,7 +40,7 @@ impl CPU {
       0
     };
 
-    println!("{}", format!("{:x}", op_code));
+    OpCodes::decode(self, op_code);
 
     self.registers.pc += 1;
   }
