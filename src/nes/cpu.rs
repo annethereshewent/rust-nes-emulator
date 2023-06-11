@@ -42,4 +42,8 @@ impl CPU {
 
     self.registers.pc += 1;
   }
+
+  pub fn cycle(&mut self, cycles: u16) {
+    // TODO
+  }
 }
