@@ -24,18 +24,18 @@ impl CPU {
       // BPL
       0x10 => self.branch(!self.registers.p.contains(CpuFlags::NEGATIVE)),
       0x16 => self.asl(AddressingMode::ZeroPageX),
-      0x1e => self.asl(AddressingMode::AbsoluteX),
       // CLC
       0x18 => self.registers.p.remove(CpuFlags::CARRY),
+      0x1e => self.asl(AddressingMode::AbsoluteX),
       0x21 => self.and(AddressingMode::IndirectX),
       0x24 => self.bit(AddressingMode::ZeroPage),
       0x25 => self.and(AddressingMode::ZeroPage),
       0x29 => self.and(AddressingMode::Immediate),
       0x2c => self.bit(AddressingMode::Absolute),
+      0x2d => self.and(AddressingMode::Absolute),
       // BMI
       0x30 => self.branch(self.registers.p.contains(CpuFlags::NEGATIVE)),
       0x31 => self.and(AddressingMode::IndirectY),
-      0x2d => self.and(AddressingMode::Absolute),
       0x35 => self.and(AddressingMode::ZeroPageX),
       0x39 => self.and(AddressingMode::AbsoluteY),
       0x3d => self.and(AddressingMode::AbsoluteX),
@@ -51,14 +51,15 @@ impl CPU {
       0x70 => self.branch(self.registers.p.contains(CpuFlags::OVERFLOW)),
       0x71 => self.adc(AddressingMode::IndirectY),
       0x75 => self.adc(AddressingMode::ZeroPageX),
-      0x7d => self.adc(AddressingMode::AbsoluteX),
       0x79 => self.adc(AddressingMode::AbsoluteY),
+      0x7d => self.adc(AddressingMode::AbsoluteX),
       // BCC
       0x90 => self.branch(!self.registers.p.contains(CpuFlags::CARRY)),
-      0xa5 =>  self.lda(AddressingMode::ZeroPage),
       0xa1 => self.lda(AddressingMode::IndirectX),
+      0xa5 =>  self.lda(AddressingMode::ZeroPage),
       0xa8 => self.tay(),
       0xa9 => self.lda(AddressingMode::Immediate),
+      0xaa => self.tax(),
       0xad => self.lda(AddressingMode::Absolute),
       // BCS
       0xb0 => self.branch(self.registers.p.contains(CpuFlags::CARRY)),
@@ -68,18 +69,44 @@ impl CPU {
       0xb8 => self.registers.p.remove(CpuFlags::OVERFLOW),
       0xb9 => self.lda(AddressingMode::AbsoluteY),
       0xbd => self.lda(AddressingMode::AbsoluteX),
-      0xaa => self.tax(),
-      0xe8 => self.inx(),
+      0xc0 => self.compare(AddressingMode::Immediate, self.registers.y),
+      0xc1 => self.compare(AddressingMode::IndirectX, self.registers.a),
+      0xc4 => self.compare(AddressingMode::ZeroPage, self.registers.y),
+      0xc5 => self.compare(AddressingMode::ZeroPage, self.registers.a),
+      0xc9 => self.compare(AddressingMode::Immediate, self.registers.a),
+      0xcc => self.compare(AddressingMode::Absolute, self.registers.y),
+      0xcd => self.compare(AddressingMode::Absolute, self.registers.a),
       // BNE
       0xd0 => self.branch(!self.registers.p.contains(CpuFlags::ZERO)),
+      0xd1 => self.compare(AddressingMode::IndirectY, self.registers.a),
+      0xd5 => self.compare(AddressingMode::ZeroPageX, self.registers.a),
       // CLD
       0xd8 => self.registers.p.remove(CpuFlags::DECIMAL_MODE),
+      0xd9 => self.compare(AddressingMode::AbsoluteY, self.registers.a),
+      0xdd => self.compare(AddressingMode::AbsoluteX, self.registers.a),
+      0xe0 => self.compare(AddressingMode::Immediate, self.registers.x),
+      0xe4 => self.compare(AddressingMode::ZeroPage, self.registers.x),
+      0xe8 => self.inx(),
       // NOP
       0xea => return,
+      0xec => self.compare(AddressingMode::Absolute, self.registers.x),
       // BEQ
       0xf0 => self.branch(self.registers.p.contains(CpuFlags::ZERO)),
       _ => println!("unknown instruction received: {}", format!("{:X}", op_code))
     }
+  }
+
+
+  fn compare(&mut self, mode: AddressingMode, compare_to: u8) {
+    let address = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    let result = compare_to - val;
+
+    self.registers.p.set(CpuFlags::CARRY, result > 0);
+
+    self.set_zero_and_negative_flags(result);
   }
 
   fn inx(&mut self) {
