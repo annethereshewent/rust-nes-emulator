@@ -18,7 +18,8 @@ impl NES {
     println!("the filepath is {}", filepath);
     let bytes: Vec<u8> = fs::read(filepath).unwrap();
 
-    let mut cpu = CPU::new(bytes);
+    let mut cpu = CPU::new();
+    cpu.load_game(bytes);
 
     for _n in 1..100 {
       if self.is_running {

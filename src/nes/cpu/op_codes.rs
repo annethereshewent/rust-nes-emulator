@@ -1,4 +1,5 @@
 use crate::nes::CPU;
+use crate::nes::cpu::CpuFlags;
 
 enum AddressingMode {
   Immediate,
@@ -11,13 +12,115 @@ enum AddressingMode {
   IndirectX,
   IndirectY,
   NoneAddressing,
-
 }
 
 impl CPU {
   pub fn decode(&mut self, op_code: u8) {
     match op_code {
-      0x00 => return,
+      0x00 => self.brk(),
+      0x06 => {
+        self.asl(AddressingMode::ZeroPage);
+        self.registers.pc += 1;
+      }
+      0x0a => self.asl_accumulator(),
+      0x0e => {
+        self.asl(AddressingMode::Absolute);
+        self.registers.pc += 2;
+      }
+      // BPL
+      0x10 => self.branch(!self.registers.p.contains(CpuFlags::NEGATIVE)),
+      0x16 => {
+        self.asl(AddressingMode::ZeroPageX);
+        self.registers.pc += 1;
+      }
+      0x1e => {
+        self.asl(AddressingMode::AbsoluteX);
+        self.registers.pc += 2;
+      }
+      // CLC
+      0x18 => self.registers.p.remove(CpuFlags::CARRY),
+      0x21 => {
+        self.and(AddressingMode::IndirectX);
+        self.registers.pc += 1;
+      }
+      0x24 => {
+        self.bit(AddressingMode::ZeroPage);
+        self.registers.pc += 1;
+      }
+      0x25 => {
+        self.and(AddressingMode::ZeroPage);
+        self.registers.pc += 1;
+      }
+      0x29 => {
+        self.and(AddressingMode::Immediate);
+        self.registers.pc += 1;
+      }
+      0x2c => {
+        self.bit(AddressingMode::Absolute);
+        self.registers.pc += 2;
+      }
+      // BMI
+      0x30 => self.branch(self.registers.p.contains(CpuFlags::NEGATIVE)),
+      0x31 => {
+        self.and(AddressingMode::IndirectY);
+        self.registers.pc += 1;
+      }
+      0x2d => {
+        self.and(AddressingMode::Absolute);
+        self.registers.pc += 2;
+      }
+      0x35 => {
+        self.and(AddressingMode::ZeroPageX);
+        self.registers.pc += 1;
+      }
+      0x39 => {
+        self.and(AddressingMode::AbsoluteY);
+        self.registers.pc += 2;
+      }
+      0x3d => {
+        self.and(AddressingMode::AbsoluteX);
+        self.registers.pc += 2;
+      }
+      // BVC
+      0x50 => self.branch(!self.registers.p.contains(CpuFlags::OVERFLOW)),
+      // CLI
+      0x58 => self.registers.p.remove(CpuFlags::INTERRUPT_DISABLE),
+      0x61 => {
+        self.adc(AddressingMode::IndirectX);
+        self.registers.pc += 1;
+      }
+      0x65 => {
+        self.adc(AddressingMode::ZeroPage);
+        self.registers.pc += 1;
+      }
+      0x69 => {
+        self.adc(AddressingMode::Immediate);
+        self.registers.pc += 1;
+      }
+      0x6d => {
+        self.adc(AddressingMode::Absolute);
+        self.registers.pc += 2;
+      }
+      // BVS
+      0x70 => self.branch(self.registers.p.contains(CpuFlags::OVERFLOW)),
+      0x71 => {
+        self.adc(AddressingMode::IndirectY);
+        self.registers.pc += 1;
+      }
+      0x75 => {
+        self.adc(AddressingMode::ZeroPageX);
+        self.registers.pc += 1;
+      }
+      0x7d => {
+        self.adc(AddressingMode::AbsoluteX);
+        self.registers.pc += 2;
+      }
+      0x79 => {
+        self.adc(AddressingMode::AbsoluteY);
+        self.registers.pc += 2;
+      }
+      // BCC
+      0x90 => self.branch(!self.registers.p.contains(CpuFlags::CARRY)),
       0xa5 =>  {
         self.lda(AddressingMode::ZeroPage);
         self.registers.pc += 1;
@@ -35,6 +138,8 @@ impl CPU {
         self.lda(AddressingMode::Absolute);
         self.registers.pc += 2;
       }
+      // BCS
+      0xb0 => self.branch(self.registers.p.contains(CpuFlags::CARRY)),
       0xb1 => {
         self.lda(AddressingMode::IndirectY);
         self.registers.pc += 1;
@@ -43,6 +148,8 @@ impl CPU {
         self.lda(AddressingMode::ZeroPageX);
         self.registers.pc += 1;
       }
+      // CLV
+      0xb8 => self.registers.p.remove(CpuFlags::OVERFLOW),
       0xb9 => {
         self.lda(AddressingMode::AbsoluteY);
         self.registers.pc += 2;
@@ -54,7 +161,15 @@ impl CPU {
 
       0xaa => self.tax(),
       0xe8 => self.inx(),
-      _ => self.todo()
+      // BNE
+      0xd0 => self.branch(!self.registers.p.contains(CpuFlags::ZERO)),
+      // CLD
+      0xd8 => self.registers.p.remove(CpuFlags::DECIMAL_MODE),
+      // NOP
+      0xea => return,
+      // BEQ
+      0xf0 => self.branch(self.registers.p.contains(CpuFlags::ZERO)),
+      _ => println!("unknown instruction received: {}", op_code)
     }
   }
 
@@ -62,6 +177,69 @@ impl CPU {
     self.registers.x += 1;
 
     self.set_zero_and_negative_flags(self.registers.x);
+  }
+
+  fn bit(&mut self, mode: AddressingMode) {
+    let address = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    let result = val & self.registers.a;
+
+    self.registers.p.set(CpuFlags::ZERO, result == 0);
+    self.registers.p.set(CpuFlags::OVERFLOW, (val >> 6) & 0b1 == 1);
+    self.registers.p.set(CpuFlags::NEGATIVE, val >> 7 == 1);
+  }
+
+  fn asl_accumulator(&mut self) {
+    if self.registers.a >> 7 == 1 {
+      self.registers.p.insert(CpuFlags::CARRY);
+    } else {
+      self.registers.p.remove(CpuFlags::CARRY);
+    }
+
+    self.registers.a = self.registers.a << 1;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+  }
+
+  fn asl(&mut self, mode: AddressingMode) {
+    let address = self.get_operand_address(mode);
+
+    let mut val = self.mem_read(address);
+
+    if val >> 7 == 1 {
+      self.registers.p.insert(CpuFlags::CARRY);
+    } else {
+      self.registers.p.remove(CpuFlags::CARRY);
+    }
+
+    val = val << 1;
+
+    self.set_zero_and_negative_flags(val);
+
+    self.mem_write(address, val);
+  }
+
+  fn brk(&mut self) {
+    self.push_to_stack_u16(self.registers.pc);
+    self.push_to_stack(self.registers.p.bits());
+
+    let address = self.mem_read_u16(0xfffe);
+
+    self.registers.p.insert(CpuFlags::BREAK);
+
+    self.registers.pc = address;
+  }
+
+  fn and(&mut self, mode: AddressingMode) {
+    let address = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    self.registers.a &= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
   }
 
   fn get_operand_address(&self, mode: AddressingMode) -> u16 {
@@ -106,8 +284,8 @@ impl CPU {
     (high_byte << 8) | low_byte
   }
 
-  fn lda(&mut self, addressing_mode: AddressingMode) {
-    let address = self.get_operand_address(addressing_mode);
+  fn lda(&mut self, mode: AddressingMode) {
+    let address = self.get_operand_address(mode);
 
     let val = self.mem_read(address);
 
@@ -125,20 +303,56 @@ impl CPU {
   fn tay(&mut self) {
     self.registers.y = self.registers.a;
 
-    self.set_zero_and_negative_flags((self.registers.y);)
+    self.set_zero_and_negative_flags(self.registers.y);
   }
 
   fn set_zero_and_negative_flags(&mut self, result: u8) {
     if result == 0 {
-      self.registers.p = self.registers.p | (0b1 << 1);
+      self.registers.p.insert(CpuFlags::ZERO);
     } else {
-      self.registers.p = self.registers.p & !(0b1 << 1);
+      self.registers.p.remove(CpuFlags::ZERO);
     }
 
     if result & (0b1 << 7) == 1 {
-      self.registers.p = self.registers.p | (0b1 << 7);
+      self.registers.p.insert(CpuFlags::NEGATIVE);
     } else {
-      self.registers.p = self.registers.p & !(0b1 << 7);
+      self.registers.p.remove(CpuFlags::NEGATIVE);
+    }
+  }
+
+  fn adc(&mut self, mode: AddressingMode) {
+    let address = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    let carry = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
+
+    let result = self.registers.a.wrapping_add(val + carry);
+
+    if self.registers.a > result {
+      self.registers.p.insert(CpuFlags::CARRY);
+    } else {
+      self.registers.p.remove(CpuFlags::CARRY);
+    }
+
+    if (val ^ result) & (result ^ self.registers.a) & 0b10000000 != 0 {
+      self.registers.p.insert(CpuFlags::OVERFLOW);
+    } else {
+      self.registers.p.remove(CpuFlags::OVERFLOW);
+    }
+
+    self.registers.a = result;
+  }
+
+  fn branch(&mut self, condition: bool) {
+    if condition {
+      let val = self.mem_read(self.registers.pc) as i8;
+
+      self.registers.pc += 1;
+
+      self.registers.pc = self.registers.pc.wrapping_add_signed(val as i16);
+    } else {
+      self.registers.pc += 1;
     }
   }
 
