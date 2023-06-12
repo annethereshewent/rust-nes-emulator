@@ -221,6 +221,8 @@ impl CPU {
          let address = self.indirect_address(self.registers.y);
 
          self.registers.pc += 1;
+
+         address
       }
       AddressingMode::NoneAddressing => panic!("mode is not supported")
     }
