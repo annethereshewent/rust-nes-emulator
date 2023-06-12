@@ -193,18 +193,14 @@ impl CPU {
         address
       }
       AddressingMode::AbsoluteX => {
-        let base_address = self.mem_read_u16(self.registers.pc);
-
-        let address = base_address.wrapping_add(self.registers.x as u16);
+        let address = self.absolute_offset_address(self.registers.x);
 
         self.registers.pc += 2;
 
         address
       }
       AddressingMode::AbsoluteY => {
-        let base_address = self.mem_read_u16(self.registers.pc);
-
-        let address = base_address.wrapping_add(self.registers.y as u16);
+        let address = self.absolute_offset_address(self.registers.y);
 
         self.registers.pc += 2;
 
@@ -239,8 +235,10 @@ impl CPU {
     (high_byte << 8) | low_byte
   }
 
-  fn absolute_offset_address() {
+  fn absolute_offset_address(&self, offset: u8) -> u16 {
+    let base_address = self.mem_read_u16(self.registers.pc);
 
+    base_address.wrapping_add(self.registers.x as u16)
   }
 
   fn lda(&mut self, mode: AddressingMode) {
