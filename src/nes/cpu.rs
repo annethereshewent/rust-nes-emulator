@@ -2,9 +2,11 @@ pub mod op_codes;
 
 use bitflags::bitflags;
 
+use super::cartridge::Cartridge;
+
 pub struct CPU {
   pub registers: Registers,
-  pub memory: [u8; 0xffff]
+  pub memory: [u8; 0x10000]
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -33,8 +35,8 @@ bitflags! {
 }
 
 impl CPU {
-  pub fn new() -> Self {
-    CPU {
+  pub fn new(cartridge: Cartridge) -> Self {
+    let mut cpu = CPU {
       registers: Registers {
         a: 0,
         pc: 0,
@@ -43,8 +45,12 @@ impl CPU {
         y: 0,
         sp: STACK_START
       },
-      memory: [0; 0xffff]
-    }
+      memory: [0; 0x10000]
+    };
+
+    cpu.load_game(cartridge.prg_rom);
+
+    cpu
   }
 
   pub fn mem_read(&self, address: u16) -> u8 {
@@ -71,7 +77,6 @@ impl CPU {
   }
 
   pub fn load_game(&mut self, rom: Vec<u8>) {
-    println!("{}", format!("{:X}", rom.len()));
     self.memory[0x8000 .. (0x8000 + rom.len())].copy_from_slice(&rom[..]);
     self.registers.pc = 0x8000;
   }

@@ -18,147 +18,56 @@ impl CPU {
   pub fn decode(&mut self, op_code: u8) {
     match op_code {
       0x00 => self.brk(),
-      0x06 => {
-        self.asl(AddressingMode::ZeroPage);
-        self.registers.pc += 1;
-      }
+      0x06 => self.asl(AddressingMode::ZeroPage),
       0x0a => self.asl_accumulator(),
-      0x0e => {
-        self.asl(AddressingMode::Absolute);
-        self.registers.pc += 2;
-      }
+      0x0e => self.asl(AddressingMode::Absolute),
       // BPL
       0x10 => self.branch(!self.registers.p.contains(CpuFlags::NEGATIVE)),
-      0x16 => {
-        self.asl(AddressingMode::ZeroPageX);
-        self.registers.pc += 1;
-      }
-      0x1e => {
-        self.asl(AddressingMode::AbsoluteX);
-        self.registers.pc += 2;
-      }
+      0x16 => self.asl(AddressingMode::ZeroPageX),
+      0x1e => self.asl(AddressingMode::AbsoluteX),
       // CLC
       0x18 => self.registers.p.remove(CpuFlags::CARRY),
-      0x21 => {
-        self.and(AddressingMode::IndirectX);
-        self.registers.pc += 1;
-      }
-      0x24 => {
-        self.bit(AddressingMode::ZeroPage);
-        self.registers.pc += 1;
-      }
-      0x25 => {
-        self.and(AddressingMode::ZeroPage);
-        self.registers.pc += 1;
-      }
-      0x29 => {
-        self.and(AddressingMode::Immediate);
-        self.registers.pc += 1;
-      }
-      0x2c => {
-        self.bit(AddressingMode::Absolute);
-        self.registers.pc += 2;
-      }
+      0x21 => self.and(AddressingMode::IndirectX),
+      0x24 => self.bit(AddressingMode::ZeroPage),
+      0x25 => self.and(AddressingMode::ZeroPage),
+      0x29 => self.and(AddressingMode::Immediate),
+      0x2c => self.bit(AddressingMode::Absolute),
       // BMI
       0x30 => self.branch(self.registers.p.contains(CpuFlags::NEGATIVE)),
-      0x31 => {
-        self.and(AddressingMode::IndirectY);
-        self.registers.pc += 1;
-      }
-      0x2d => {
-        self.and(AddressingMode::Absolute);
-        self.registers.pc += 2;
-      }
-      0x35 => {
-        self.and(AddressingMode::ZeroPageX);
-        self.registers.pc += 1;
-      }
-      0x39 => {
-        self.and(AddressingMode::AbsoluteY);
-        self.registers.pc += 2;
-      }
-      0x3d => {
-        self.and(AddressingMode::AbsoluteX);
-        self.registers.pc += 2;
-      }
+      0x31 => self.and(AddressingMode::IndirectY),
+      0x2d => self.and(AddressingMode::Absolute),
+      0x35 => self.and(AddressingMode::ZeroPageX),
+      0x39 => self.and(AddressingMode::AbsoluteY),
+      0x3d => self.and(AddressingMode::AbsoluteX),
       // BVC
       0x50 => self.branch(!self.registers.p.contains(CpuFlags::OVERFLOW)),
       // CLI
       0x58 => self.registers.p.remove(CpuFlags::INTERRUPT_DISABLE),
-      0x61 => {
-        self.adc(AddressingMode::IndirectX);
-        self.registers.pc += 1;
-      }
-      0x65 => {
-        self.adc(AddressingMode::ZeroPage);
-        self.registers.pc += 1;
-      }
-      0x69 => {
-        self.adc(AddressingMode::Immediate);
-        self.registers.pc += 1;
-      }
-      0x6d => {
-        self.adc(AddressingMode::Absolute);
-        self.registers.pc += 2;
-      }
+      0x61 => self.adc(AddressingMode::IndirectX),
+      0x65 => self.adc(AddressingMode::ZeroPage),
+      0x69 => self.adc(AddressingMode::Immediate),
+      0x6d => self.adc(AddressingMode::Absolute),
       // BVS
       0x70 => self.branch(self.registers.p.contains(CpuFlags::OVERFLOW)),
-      0x71 => {
-        self.adc(AddressingMode::IndirectY);
-        self.registers.pc += 1;
-      }
-      0x75 => {
-        self.adc(AddressingMode::ZeroPageX);
-        self.registers.pc += 1;
-      }
-      0x7d => {
-        self.adc(AddressingMode::AbsoluteX);
-        self.registers.pc += 2;
-      }
-      0x79 => {
-        self.adc(AddressingMode::AbsoluteY);
-        self.registers.pc += 2;
-      }
+      0x71 => self.adc(AddressingMode::IndirectY),
+      0x75 => self.adc(AddressingMode::ZeroPageX),
+      0x7d => self.adc(AddressingMode::AbsoluteX),
+      0x79 => self.adc(AddressingMode::AbsoluteY),
       // BCC
       0x90 => self.branch(!self.registers.p.contains(CpuFlags::CARRY)),
-      0xa5 =>  {
-        self.lda(AddressingMode::ZeroPage);
-        self.registers.pc += 1;
-      }
-      0xa1 => {
-        self.lda(AddressingMode::IndirectX);
-        self.registers.pc += 1;
-      }
+      0xa5 =>  self.lda(AddressingMode::ZeroPage),
+      0xa1 => self.lda(AddressingMode::IndirectX),
       0xa8 => self.tay(),
-      0xa9 => {
-        self.lda(AddressingMode::Immediate);
-        self.registers.pc += 1;
-      }
-      0xad => {
-        self.lda(AddressingMode::Absolute);
-        self.registers.pc += 2;
-      }
+      0xa9 => self.lda(AddressingMode::Immediate),
+      0xad => self.lda(AddressingMode::Absolute),
       // BCS
       0xb0 => self.branch(self.registers.p.contains(CpuFlags::CARRY)),
-      0xb1 => {
-        self.lda(AddressingMode::IndirectY);
-        self.registers.pc += 1;
-      }
-      0xb5 => {
-        self.lda(AddressingMode::ZeroPageX);
-        self.registers.pc += 1;
-      }
+      0xb1 => self.lda(AddressingMode::IndirectY),
+      0xb5 => self.lda(AddressingMode::ZeroPageX),
       // CLV
       0xb8 => self.registers.p.remove(CpuFlags::OVERFLOW),
-      0xb9 => {
-        self.lda(AddressingMode::AbsoluteY);
-        self.registers.pc += 2;
-      }
-      0xbd => {
-        self.lda(AddressingMode::AbsoluteX);
-        self.registers.pc += 2;
-      }
-
+      0xb9 => self.lda(AddressingMode::AbsoluteY),
+      0xbd => self.lda(AddressingMode::AbsoluteX),
       0xaa => self.tax(),
       0xe8 => self.inx(),
       // BNE
@@ -169,7 +78,7 @@ impl CPU {
       0xea => return,
       // BEQ
       0xf0 => self.branch(self.registers.p.contains(CpuFlags::ZERO)),
-      _ => println!("unknown instruction received: {}", op_code)
+      _ => println!("unknown instruction received: {}", format!("{:X}", op_code))
     }
   }
 
@@ -242,33 +151,77 @@ impl CPU {
     self.set_zero_and_negative_flags(self.registers.a);
   }
 
-  fn get_operand_address(&self, mode: AddressingMode) -> u16 {
+  fn get_operand_address(&mut self, mode: AddressingMode) -> u16 {
     match mode {
-      AddressingMode::Immediate => self.registers.pc,
-      AddressingMode::ZeroPage => self.memory[self.registers.pc as usize] as u16,
+      AddressingMode::Immediate => {
+        let address = self.registers.pc;
+
+        self.registers.pc += 1;
+
+        address
+      }
+      AddressingMode::ZeroPage => {
+        let address = self.memory[self.registers.pc as usize] as u16;
+
+        self.registers.pc += 1;
+
+        address
+      }
       AddressingMode::ZeroPageX => {
         let base_address = self.memory[self.registers.pc as usize];
 
-        base_address.wrapping_add(self.registers.x) as u16
+        let address = base_address.wrapping_add(self.registers.x) as u16;
+
+        self.registers.pc += 1;
+
+        address
       }
       AddressingMode::ZeroPageY => {
         let base_address = self.mem_read(self.registers.pc);
 
-       base_address.wrapping_add(self.registers.y) as u16
+        let address = base_address.wrapping_add(self.registers.y) as u16;
+
+        self.registers.pc += 1;
+
+        address
       }
-      AddressingMode::Absolute => self.mem_read_u16(self.registers.pc),
+      AddressingMode::Absolute => {
+        let address = self.mem_read_u16(self.registers.pc);
+
+        self.registers.pc += 2;
+
+        address
+      }
       AddressingMode::AbsoluteX => {
         let base_address = self.mem_read_u16(self.registers.pc);
 
-        base_address.wrapping_add(self.registers.x as u16)
+        let address = base_address.wrapping_add(self.registers.x as u16);
+
+        self.registers.pc += 2;
+
+        address
       }
       AddressingMode::AbsoluteY => {
         let base_address = self.mem_read_u16(self.registers.pc);
 
-        base_address.wrapping_add(self.registers.y as u16)
+        let address = base_address.wrapping_add(self.registers.y as u16);
+
+        self.registers.pc += 2;
+
+        address
       }
-      AddressingMode::IndirectX => self.indirect_address(self.registers.x),
-      AddressingMode::IndirectY => self.indirect_address(self.registers.y),
+      AddressingMode::IndirectX => {
+        let address = self.indirect_address(self.registers.x);
+
+        self.registers.pc += 1;
+
+        address
+      }
+      AddressingMode::IndirectY => {
+         let address = self.indirect_address(self.registers.y);
+
+         self.registers.pc += 1;
+      }
       AddressingMode::NoneAddressing => panic!("mode is not supported")
     }
   }
@@ -282,6 +235,10 @@ impl CPU {
     let high_byte = self.mem_read(actual_address.wrapping_add(1) as u16) as u16;
 
     (high_byte << 8) | low_byte
+  }
+
+  fn absolute_offset_address() {
+
   }
 
   fn lda(&mut self, mode: AddressingMode) {
