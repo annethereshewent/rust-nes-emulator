@@ -11,6 +11,7 @@ pub enum AddressingMode {
   Absolute,
   AbsoluteX,
   AbsoluteY,
+  Indirect,
   IndirectX,
   IndirectY,
   NoneAddressing,
@@ -20,17 +21,18 @@ pub enum AddressingMode {
 impl fmt::Display for AddressingMode {
   fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
     match self {
-      AddressingMode::Immediate => write!(f, "Immediate"),
-      AddressingMode::ZeroPage => write!(f, "Zero Page"),
-      AddressingMode::ZeroPageX => write!(f, "Zero Page X"),
-      AddressingMode::ZeroPageY => write!(f, "Zero Page Y"),
-      AddressingMode::Absolute => write!(f, "Absolute"),
-      AddressingMode::AbsoluteX => write!(f, "Absolute X"),
-      AddressingMode::AbsoluteY => write!(f, "Absolute Y"),
-      AddressingMode::IndirectX => write!(f, "Indirect X"),
-      AddressingMode::IndirectY => write!(f, "Indirect Y"),
-      AddressingMode::NoneAddressing => write!(f, "None"),
-      AddressingMode::Accumulator => write!(f, "Accumulator")
+      AddressingMode::Immediate => write!(f, "immediate"),
+      AddressingMode::ZeroPage => write!(f, "zero page"),
+      AddressingMode::ZeroPageX => write!(f, "zero page x"),
+      AddressingMode::ZeroPageY => write!(f, "zero page y"),
+      AddressingMode::Absolute => write!(f, "absolute"),
+      AddressingMode::AbsoluteX => write!(f, "absolute x"),
+      AddressingMode::AbsoluteY => write!(f, "absolute y"),
+      AddressingMode::Indirect => write!(f, "indirect"),
+      AddressingMode::IndirectX => write!(f, "indirect x"),
+      AddressingMode::IndirectY => write!(f, "indirect y"),
+      AddressingMode::NoneAddressing => write!(f, "none"),
+      AddressingMode::Accumulator => write!(f, "accumulator")
     }
   }
 }
@@ -106,12 +108,17 @@ impl CPU {
       "DEC" => self.dec(mode),
       "DEX" => self.dex(),
       "DEY" => self.dey(),
+      "EOR" => self.eor(mode),
+      "INC" => self.inc(mode),
       "INX" => self.inx(),
+      "INY" => self.iny(),
       "LDA" => self.lda(mode),
       "TAX" => self.tax(),
       "TAY" => self.tay(),
       _ => println!("instruction not implemented yet")
     }
+
+    self.cycle(instruction.cycles);
   }
 
   fn compare(&mut self, mode: &AddressingMode, compare_to: u8) {
@@ -126,10 +133,36 @@ impl CPU {
     self.set_zero_and_negative_flags(result);
   }
 
+  fn inc(&mut self, mode: &AddressingMode) {
+    let address = self.get_operand_address(mode);
+
+    let result = self.mem_read(address) + 1;
+
+    self.set_zero_and_negative_flags(result);
+
+    self.mem_write(address, result);
+  }
+
+  fn eor(&mut self, mode: &AddressingMode) {
+    let address = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    self.registers.a ^= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+  }
+
   fn inx(&mut self) {
     self.registers.x += 1;
 
     self.set_zero_and_negative_flags(self.registers.x);
+  }
+
+  fn iny(&mut self) {
+    self.registers.y += 1;
+
+    self.set_zero_and_negative_flags(self.registers.y);
   }
 
   fn bit(&mut self, mode: &AddressingMode) {
@@ -145,11 +178,7 @@ impl CPU {
   }
 
   fn asl_accumulator(&mut self) {
-    if self.registers.a >> 7 == 1 {
-      self.registers.p.insert(CpuFlags::CARRY);
-    } else {
-      self.registers.p.remove(CpuFlags::CARRY);
-    }
+    self.registers.p.set(CpuFlags::CARRY, self.registers.a >> 7 == 1);
 
     self.registers.a = self.registers.a << 1;
 
@@ -165,11 +194,7 @@ impl CPU {
 
     let mut val = self.mem_read(address);
 
-    if val >> 7 == 1 {
-      self.registers.p.insert(CpuFlags::CARRY);
-    } else {
-      self.registers.p.remove(CpuFlags::CARRY);
-    }
+    self.registers.p.set(CpuFlags::CARRY, val >> 7 == 1);
 
     val = val << 1;
 
@@ -276,34 +301,52 @@ impl CPU {
 
         address
       }
-      AddressingMode::IndirectX => {
-        let address = self.get_indirect_address(self.registers.x);
+      AddressingMode::Indirect => {
+        let indirect_address = self.mem_read_u16(self.registers.pc);
 
-        self.registers.pc += 1;
+        // per https://github.com/bugzmanov/nes_ebook/blob/master/code/ch8/src/cpu.rs
+        // if the address ends in ff there is a bug where the lower byte of the address
+        // wraps around and starts at 00. (ie: if address is 0x30ff, upper byte is at 0x3000).
+        // Otherwise it works exactly as it should
+
+        let address = if indirect_address & 0xff == 0xff   {
+          let lower_byte = self.mem_read(indirect_address) as u16;
+          let upper_byte = self.mem_read(indirect_address & 0xff00) as u16;
+
+          (upper_byte << 8) | lower_byte
+        } else {
+          self.mem_read_u16(indirect_address as u16)
+        };
 
         address
       }
+      AddressingMode::IndirectX => {
+        let base_address = self.mem_read(self.registers.pc);
+
+        let actual_address = base_address.wrapping_add(self.registers.x);
+
+        let low_byte = self.mem_read(actual_address as u16) as u16;
+        let high_byte = self.mem_read(actual_address.wrapping_add(1) as u16) as u16;
+
+        self.registers.pc += 1;
+
+        (high_byte << 8) | low_byte
+      }
       AddressingMode::IndirectY => {
-         let address = self.get_indirect_address(self.registers.y);
+         let base_address = self.mem_read(self.registers.pc);
+
+         let low_byte = self.mem_read(base_address as u16) as u16;
+         let high_byte = self.mem_read(base_address.wrapping_add(1) as u16) as u16;
+
+         let actual_address = ((high_byte << 8) | low_byte).wrapping_add(self.registers.y as u16);
 
          self.registers.pc += 1;
 
-         address
+         actual_address
       }
       AddressingMode::NoneAddressing => panic!("mode is not supported"),
       AddressingMode::Accumulator => panic!("no address required for this mode")
     }
-  }
-
-  fn get_indirect_address(&self, offset: u8) -> u16 {
-    let base_address = self.mem_read(self.registers.pc);
-
-    let actual_address = base_address.wrapping_add(offset);
-
-    let low_byte = self.mem_read(actual_address as u16) as u16;
-    let high_byte = self.mem_read(actual_address.wrapping_add(1) as u16) as u16;
-
-    (high_byte << 8) | low_byte
   }
 
   fn get_absolute_offset_address(&self, offset: u8) -> u16 {
@@ -382,9 +425,5 @@ impl CPU {
     } else {
       self.registers.pc += 1;
     }
-  }
-
-  fn todo(&mut self) {
-
   }
 }
