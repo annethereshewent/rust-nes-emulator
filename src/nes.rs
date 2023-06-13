@@ -24,7 +24,7 @@ impl NES {
 
     let mut cpu = CPU::new(cartridge);
 
-    for _n in 1..100 {
+    loop {
       if self.is_running {
         cpu.tick();
       } else {

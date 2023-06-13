@@ -34,6 +34,20 @@ bitflags! {
   }
 }
 
+impl CpuFlags {
+  // there doesn't seem to be a way to just se the value to the byte easily so it has to be done like this
+  pub fn set_bits(&mut self, byte: u8) {
+    self.set(Self::CARRY, byte & 0b1 == 1);
+    self.set(Self::ZERO, (byte >> 1) & 0b1 == 1);
+    self.set(Self::INTERRUPT_DISABLE, (byte >> 2) & 0b1 == 1);
+    self.set(Self::DECIMAL_MODE, (byte >> 3) & 0b1 == 1);
+    self.set(Self::BREAK, (byte >> 4) & 0b1 == 1);
+    self.set(Self::BREAK2, (byte >> 5) & 0b1 == 1);
+    self.set(Self::OVERFLOW, (byte >> 6) & 0b1 == 1);
+    self.set(Self::NEGATIVE, (byte >> 7) & 0b1 == 1);
+  }
+}
+
 impl CPU {
   pub fn new(cartridge: Cartridge) -> Self {
     let mut cpu = CPU {
