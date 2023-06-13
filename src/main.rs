@@ -3,6 +3,9 @@ pub mod nes;
 use std::env;
 use nes::NES;
 
+#[macro_use]
+extern crate lazy_static;
+
 fn main() {
   let mut nes = NES::new();
 
