@@ -89,6 +89,7 @@ impl CPU {
     match instruction.name {
       "ADC" => self.adc(mode),
       "ALR" => self.alr(mode),
+      "ANC" => self.anc(mode),
       "AND" => self.and(mode),
       "ARR" => self.arr(mode),
       "ASL" => self.asl(mode),
@@ -110,6 +111,7 @@ impl CPU {
       "CMP" => self.compare(mode, self.registers.a),
       "CPX" => self.compare(mode, self.registers.x),
       "CPY" => self.compare(mode, self.registers.y),
+      "DCP" => self.dcp(mode),
       "DEC" => self.dec(mode),
       "DEX" => self.dex(),
       "DEY" => self.dey(),
@@ -118,6 +120,7 @@ impl CPU {
       "INC" => self.inc(mode),
       "INX" => self.inx(),
       "INY" => self.iny(),
+      "ISC" => self.isc(mode),
       "JMP" => self.jmp(mode),
       "JSR" => self.jsr(mode),
       "LDA" => self.lda(mode),
@@ -131,10 +134,13 @@ impl CPU {
       "PHP" => self.php(),
       "PLA" => self.pla(),
       "PLP" => self.plp(),
+      "RLA" => self.rla(mode),
       "ROL" => self.rol(mode),
       "ROR" => self.ror(mode),
+      "RRA" => self.rra(mode),
       "RTI" => self.rti(),
       "RTS" => self.rts(),
+      "SAX" => self.sax(mode),
       "SBC" => self.sbc(mode),
       "SEC" => self.registers.p.insert(CpuFlags::CARRY),
       "SED" => self.registers.p.insert(CpuFlags::DECIMAL_MODE),
@@ -149,8 +155,7 @@ impl CPU {
       "TXA" => self.txa(),
       "TXS" => self.registers.sp = self.registers.x,
       "TYA" => self.tya(),
-      "XXX" => panic!("unknown op code received: {}", format!("{:X}", op_code)),
-      _ => println!("instruction not implemented yet")
+      _ => panic!("unknown op code received: {}", format!("{:X}", op_code)),
     }
 
     self.cycle(instruction.cycles);
@@ -170,9 +175,49 @@ impl CPU {
     }
   }
 
+  fn isc(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.mem_read(address).wrapping_add(1);
+
+    self.subtract_carry(val);
+  }
+
+  fn rla(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.rotate_left(self.mem_read(address));
+
+    self.registers.a &= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+  }
+
+  fn rra(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.rotate_right(self.mem_read(address));
+
+    self.registers.a &= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+  }
+
   fn lax(&mut self, mode: &AddressingMode) {
     self.lda(mode);
     self.registers.x = self.registers.a;
+  }
+
+  fn dcp(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let result = self.mem_read(address).wrapping_sub(1);
+
+    self.mem_write(address, result);
+
+    // CMP
+    let cmp_result = self.registers.a.wrapping_sub(result);
+
+    self.registers.p.set(CpuFlags::CARRY, self.registers.a >= result);
+
+    self.set_zero_and_negative_flags(cmp_result);
+
   }
 
   fn alr(&mut self, mode: &AddressingMode) {
@@ -194,6 +239,8 @@ impl CPU {
 
     self.registers.a &= val;
 
+    self.set_zero_and_negative_flags(self.registers.a);
+
     self.ror_accumulator();
 
     let bit6 = (self.registers.a >> 6) & 0b1;
@@ -202,6 +249,14 @@ impl CPU {
     self.registers.p.set(CpuFlags::CARRY, bit6 == 1);
     self.registers.p.set(CpuFlags::OVERFLOW, bit6 ^ bit5 == 1);
 
+  }
+
+  fn sax(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+
+    let result = self.registers.a & self.registers.x;
+
+    self.mem_write(address, result);
   }
 
   fn axs(&mut self, mode: &AddressingMode) {
@@ -271,6 +326,12 @@ impl CPU {
 
     let mut val = self.mem_read(address);
 
+    val = self.rotate_left(val);
+
+    self.mem_write(address, val);
+  }
+
+  fn rotate_left(&mut self, mut val: u8) -> u8 {
     self.registers.p.set(CpuFlags::CARRY, val >> 7 == 1);
 
     let carry: u8 = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
@@ -279,7 +340,7 @@ impl CPU {
 
     self.registers.p.set(CpuFlags::NEGATIVE, val >> 7 == 1);
 
-    self.mem_write(address, val);
+    val
   }
 
   fn rol_accumulator(&mut self) {
@@ -299,8 +360,12 @@ impl CPU {
 
     let (address, _) = self.get_operand_address(mode);
 
-    let mut val = self.mem_read(address);
+    let val = self.rotate_right(self.mem_read(address));
 
+    self.mem_write(address, val);
+  }
+
+  fn rotate_right(&mut self, mut val: u8) -> u8 {
     self.registers.p.set(CpuFlags::CARRY, val & 0b1 == 1);
 
     let carry: u8 = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
@@ -309,7 +374,7 @@ impl CPU {
 
     self.registers.p.set(CpuFlags::NEGATIVE, val >> 7 == 1);
 
-    self.mem_write(address, val);
+    val
   }
 
   fn ror_accumulator(&mut self) {
@@ -355,7 +420,7 @@ impl CPU {
 
     let result = compare_to.wrapping_sub(val);
 
-    self.registers.p.set(CpuFlags::CARRY, result > 0);
+    self.registers.p.set(CpuFlags::CARRY, compare_to >= val);
 
     self.set_zero_and_negative_flags(result);
 
@@ -486,6 +551,17 @@ impl CPU {
     self.registers.p.insert(CpuFlags::BREAK2);
 
     self.registers.pc = address;
+  }
+
+  fn anc(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.mem_read(address);
+
+    self.registers.a &= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+
+    self.registers.p.set(CpuFlags::CARRY, self.registers.a >> 7 == 1)
   }
 
   fn and(&mut self, mode: &AddressingMode) {
@@ -752,6 +828,17 @@ impl CPU {
 
     let val = self.mem_read(address);
 
+    self.subtract_carry(val);
+
+    self.set_zero_and_negative_flags(self.registers.a);
+
+    if page_cross {
+      self.cycle(1);
+    }
+
+  }
+
+  fn subtract_carry(&mut self, val: u8) {
     let carry_subtract: u8 = if !self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
 
     let (result_without_carry, is_carry1) = self.registers.a.overflowing_sub(val);
@@ -761,14 +848,9 @@ impl CPU {
 
     self.registers.p.set(CpuFlags::OVERFLOW, ((val ^ self.registers.a) & 0b10000000  == 0b10000000) && ((result_with_carry ^ self.registers.a) & 0b10000000 == 0b10000000));
 
-    self.registers.a = result_with_carry;
-
     self.set_zero_and_negative_flags(result_with_carry);
 
-    if page_cross {
-      self.cycle(1);
-    }
-
+    self.registers.a = result_with_carry;
   }
 
   fn branch(&mut self, condition: bool) {
