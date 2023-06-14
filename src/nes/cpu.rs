@@ -93,7 +93,7 @@ impl CPU {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize] = value,
       0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize] = value,
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
-      _ => println!("ignoring write to address {address}")
+      _ => self.memory[address as usize] = value
     };
   }
 

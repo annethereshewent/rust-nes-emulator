@@ -88,8 +88,11 @@ impl CPU {
 
     match instruction.name {
       "ADC" => self.adc(mode),
+      "ALR" => self.alr(mode),
       "AND" => self.and(mode),
+      "ARR" => self.arr(mode),
       "ASL" => self.asl(mode),
+      "AXS" => self.axs(mode),
       "BCC" => self.branch(!self.registers.p.contains(CpuFlags::CARRY)),
       "BCS" => self.branch(self.registers.p.contains(CpuFlags::CARRY)),
       "BEQ" => self.branch(self.registers.p.contains(CpuFlags::ZERO)),
@@ -120,6 +123,7 @@ impl CPU {
       "LDA" => self.lda(mode),
       "LDX" => self.ldx(mode),
       "LDY" => self.ldy(mode),
+      "LAX" => self.lax(mode),
       "LSR" => self.lsr(mode),
       "NOP" => self.nop(),
       "ORA" => self.ora(mode),
@@ -145,6 +149,7 @@ impl CPU {
       "TXA" => self.txa(),
       "TXS" => self.registers.sp = self.registers.x,
       "TYA" => self.tya(),
+      "XXX" => panic!("unknown op code received: {}", format!("{:X}", op_code)),
       _ => println!("instruction not implemented yet")
     }
 
@@ -163,6 +168,54 @@ impl CPU {
     if page_cross {
       self.cycle(1);
     }
+  }
+
+  fn lax(&mut self, mode: &AddressingMode) {
+    self.lda(mode);
+    self.registers.x = self.registers.a;
+  }
+
+  fn alr(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    self.registers.a &= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+
+    self.lsr_accumulator();
+  }
+
+  fn arr(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+
+    let val = self.mem_read(address);
+
+    self.registers.a &= val;
+
+    self.ror_accumulator();
+
+    let bit6 = (self.registers.a >> 6) & 0b1;
+    let bit5 = (self.registers.a >> 5) & 0b1;
+
+    self.registers.p.set(CpuFlags::CARRY, bit6 == 1);
+    self.registers.p.set(CpuFlags::OVERFLOW, bit6 ^ bit5 == 1);
+
+  }
+
+  fn axs(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.mem_read(address);
+
+    let x_and_a = self.registers.x & self.registers.a;
+
+    let (result, carry) = x_and_a.overflowing_sub(val);
+
+    self.registers.x = result;
+
+    self.registers.p.set(CpuFlags::CARRY, carry);
+    self.set_zero_and_negative_flags(result);
   }
 
   fn skb(&mut self, mode: &AddressingMode) {
@@ -224,6 +277,8 @@ impl CPU {
 
     val = (val << 1) | carry;
 
+    self.registers.p.set(CpuFlags::NEGATIVE, val >> 7 == 1);
+
     self.mem_write(address, val);
   }
 
@@ -233,6 +288,8 @@ impl CPU {
     self.registers.p.set(CpuFlags::CARRY, self.registers.a >> 7 == 1);
 
     self.registers.a = (self.registers.a << 1) | carry;
+
+    self.set_zero_and_negative_flags(self.registers.a);
   }
 
   fn ror(&mut self, mode: &AddressingMode) {
@@ -250,6 +307,8 @@ impl CPU {
 
     val = (val >> 1) | (carry << 7);
 
+    self.registers.p.set(CpuFlags::NEGATIVE, val >> 7 == 1);
+
     self.mem_write(address, val);
   }
 
@@ -259,6 +318,8 @@ impl CPU {
     self.registers.p.set(CpuFlags::CARRY, self.registers.a & 0b1 == 1);
 
     self.registers.a = (self.registers.a >> 1) | (carry << 7);
+
+    self.set_zero_and_negative_flags(self.registers.a);
   }
 
   fn pha(&mut self) {
@@ -677,11 +738,7 @@ impl CPU {
       self.registers.p.remove(CpuFlags::CARRY);
     }
 
-    if (val ^ result) & (result ^ self.registers.a) & 0b10000000 != 0 {
-      self.registers.p.insert(CpuFlags::OVERFLOW);
-    } else {
-      self.registers.p.remove(CpuFlags::OVERFLOW);
-    }
+    self.registers.p.set(CpuFlags::OVERFLOW, (val ^ result) & (result ^ self.registers.a) & 0b10000000 != 0);
 
     self.registers.a = result;
 
@@ -701,6 +758,8 @@ impl CPU {
     let (result_with_carry, is_carry2) = result_without_carry.overflowing_sub(carry_subtract);
 
     self.registers.p.set(CpuFlags::CARRY, !(is_carry1 || is_carry2));
+
+    self.registers.p.set(CpuFlags::OVERFLOW, ((val ^ self.registers.a) & 0b10000000  == 0b10000000) && ((result_with_carry ^ self.registers.a) & 0b10000000 == 0b10000000));
 
     self.registers.a = result_with_carry;
 
