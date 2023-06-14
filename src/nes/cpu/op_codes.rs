@@ -146,6 +146,8 @@ impl CPU {
       "SED" => self.registers.p.insert(CpuFlags::DECIMAL_MODE),
       "SEI" => self.registers.p.insert(CpuFlags::INTERRUPT_DISABLE),
       "SKB" => self.skb(mode),
+      "SLO" => self.slo(mode),
+      "SRE" => self.sre(mode),
       "STA" => self.store(mode, self.registers.a),
       "STX" => self.store(mode, self.registers.x),
       "STY" => self.store(mode, self.registers.y),
@@ -179,12 +181,36 @@ impl CPU {
     let (address, _) = self.get_operand_address(mode);
     let val = self.mem_read(address).wrapping_add(1);
 
+    self.mem_write(address, val);
+
     self.subtract_carry(val);
+  }
+
+  fn slo(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.arithmetic_shift_left(self.mem_read(address));
+
+    self.mem_write(address, val);
+
+    self.registers.a = self.registers.a | val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
+  }
+
+  fn sre(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+    let val = self.logical_shift_right(self.mem_read(address));
+
+    self.mem_write(address, val);
+
+    self.registers.a ^= val;
   }
 
   fn rla(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
     let val = self.rotate_left(self.mem_read(address));
+
+    self.mem_write(address, val);
 
     self.registers.a &= val;
 
@@ -194,6 +220,8 @@ impl CPU {
   fn rra(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
     let val = self.rotate_right(self.mem_read(address));
+
+    self.mem_write(address, val);
 
     self.registers.a &= val;
 
@@ -492,11 +520,7 @@ impl CPU {
   }
 
   fn asl_accumulator(&mut self) {
-    self.registers.p.set(CpuFlags::CARRY, self.registers.a >> 7 == 1);
-
-    self.registers.a = self.registers.a << 1;
-
-    self.set_zero_and_negative_flags(self.registers.a);
+    self.registers.a = self.arithmetic_shift_left(self.registers.a);
   }
 
   fn asl(&mut self, mode: &AddressingMode) {
@@ -506,15 +530,19 @@ impl CPU {
 
     let (address, _) = self.get_operand_address(mode);
 
-    let mut val = self.mem_read(address);
+    let val = self.arithmetic_shift_left(self.mem_read(address));
 
+    self.mem_write(address, val);
+  }
+
+  fn arithmetic_shift_left(&mut self, mut val: u8) -> u8 {
     self.registers.p.set(CpuFlags::CARRY, val >> 7 == 1);
 
     val = val << 1;
 
     self.set_zero_and_negative_flags(val);
 
-    self.mem_write(address, val);
+    val
   }
 
   fn lsr(&mut self, mode: &AddressingMode) {
@@ -524,21 +552,23 @@ impl CPU {
 
     let (address, _) = self.get_operand_address(mode);
 
-    let mut val = self.mem_read(address);
-
-    self.registers.p.set(CpuFlags::CARRY, val & 0b1 == 1);
-
-    val = val >> 1;
+    let val = self.logical_shift_right(self.mem_read(address));
 
     self.mem_write(address, val);
   }
 
+  fn logical_shift_right(&mut self, mut val: u8) -> u8 {
+    self.registers.p.set(CpuFlags::CARRY, val & 0b1 == 1);
+
+    val = val >> 1;
+
+    self.set_zero_and_negative_flags(val);
+
+    val
+  }
+
   fn lsr_accumulator(&mut self) {
-    self.registers.p.set(CpuFlags::CARRY, self.registers.a & 0b1 == 1);
-
-    self.registers.a = self.registers.a >> 1;
-
-    self.set_zero_and_negative_flags(self.registers.a)
+    self.registers.a = self.logical_shift_right(self.registers.a);
   }
 
   fn brk(&mut self) {
