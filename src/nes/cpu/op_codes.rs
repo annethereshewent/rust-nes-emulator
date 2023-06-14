@@ -184,6 +184,10 @@ impl CPU {
   fn rti(&mut self) {
     let byte = self.pop_from_stack();
     self.registers.p.set_bits(byte);
+
+    self.registers.p.remove(CpuFlags::BREAK);
+    self.registers.p.insert(CpuFlags::BREAK2);
+
     self.registers.pc = self.pop_from_stack_u16();
   }
 
@@ -244,7 +248,13 @@ impl CPU {
   }
 
   fn php(&mut self) {
-    self.push_to_stack(self.registers.p.bits());
+
+    let mut flags = self.registers.p.bits().clone();
+
+    flags |= 0b1 << 4;
+    flags |= 0b1 << 5;
+
+    self.push_to_stack(flags);
   }
 
   fn pla(&mut self) {
@@ -254,6 +264,9 @@ impl CPU {
   fn plp(&mut self) {
     let byte = self.pop_from_stack();
     self.registers.p.set_bits(byte);
+
+    self.registers.p.remove(CpuFlags::BREAK);
+    self.registers.p.insert(CpuFlags::BREAK2);
   }
 
   fn compare(&mut self, mode: &AddressingMode, compare_to: u8) {
@@ -391,6 +404,7 @@ impl CPU {
     let address = self.mem_read_u16(0xfffe);
 
     self.registers.p.insert(CpuFlags::BREAK);
+    self.registers.p.insert(CpuFlags::BREAK2);
 
     self.registers.pc = address;
   }
@@ -670,7 +684,7 @@ impl CPU {
     let carry_subtract: u8 = if !self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
 
     let (result_without_carry, is_carry1) = self.registers.a.overflowing_sub(val);
-    let (result_with_carry, is_carry2) = self.registers.a.overflowing_sub(carry_subtract);
+    let (result_with_carry, is_carry2) = result_without_carry.overflowing_sub(carry_subtract);
 
     self.registers.p.set(CpuFlags::CARRY, !(is_carry1 || is_carry2));
 

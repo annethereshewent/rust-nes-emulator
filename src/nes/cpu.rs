@@ -68,19 +68,28 @@ impl CPU {
   }
 
   pub fn mem_read(&self, address: u16) -> u8 {
-    self.memory[address as usize]
+    match address {
+      0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize],
+      0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize],
+      _ => self.memory[address as usize]
+    }
   }
 
   pub fn mem_write(&mut self, address: u16, value: u8) {
-    self.memory[address as usize] = value;
+    match address {
+      0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize] = value,
+      0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize] = value,
+      0x8000 ..= 0xffff => panic!("attempting to write to rom"),
+      _ => println!("ignoring write to address {address}")
+    };
   }
 
   pub fn mem_write_u16(&mut self, address: u16, value: u16) {
     let lower_byte = (value & 0b11111111) as u8;
     let upper_byte = ((value >> 8) & 0b11111111) as u8;
 
-    self.memory[address as usize] = lower_byte;
-    self.memory[(address + 1) as usize] = upper_byte;
+    self.mem_write(address, lower_byte);
+    self.mem_write(address + 1, upper_byte);
   }
 
   pub fn mem_read_u16(&self, address: u16) -> u16 {
