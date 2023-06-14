@@ -700,11 +700,16 @@ impl CPU {
 
   fn branch(&mut self, condition: bool) {
     if condition {
+      self.cycle(1);
       let val = self.mem_read(self.registers.pc) as i8;
 
       self.registers.pc += 1;
 
-      self.registers.pc = self.registers.pc.wrapping_add_signed(val as i16);
+      let jump_address = self.registers.pc.wrapping_add_signed(val as i16);
+
+      if self.registers.pc.wrapping_add(1) & 0xff00 != jump_address & 0xff00 {
+        self.cycle(1);
+      }
     } else {
       self.registers.pc += 1;
     }
