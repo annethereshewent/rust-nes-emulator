@@ -17,6 +17,11 @@ impl Cartridge {
       panic!("file is not in ines format!");
     }
 
+    let ines_ver = (rom[7] >> 2) & 0b11;
+    if ines_ver != 0 {
+        panic!("NES2.0 format is not supported");
+    }
+
     let skip_trainer = (rom[6] >> 3) & 0b1 == 1;
 
     let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };

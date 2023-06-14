@@ -111,6 +111,7 @@ impl CPU {
       "DEX" => self.dex(),
       "DEY" => self.dey(),
       "EOR" => self.eor(mode),
+      "IGN" => self.ign(mode),
       "INC" => self.inc(mode),
       "INX" => self.inx(),
       "INY" => self.iny(),
@@ -134,6 +135,7 @@ impl CPU {
       "SEC" => self.registers.p.insert(CpuFlags::CARRY),
       "SED" => self.registers.p.insert(CpuFlags::DECIMAL_MODE),
       "SEI" => self.registers.p.insert(CpuFlags::INTERRUPT_DISABLE),
+      "SKB" => self.skb(mode),
       "STA" => self.store(mode, self.registers.a),
       "STX" => self.store(mode, self.registers.x),
       "STY" => self.store(mode, self.registers.y),
@@ -151,6 +153,22 @@ impl CPU {
 
   fn nop(&self) {
     // do nothing
+  }
+
+  fn ign(&mut self, mode: &AddressingMode) {
+    let (address, page_cross) = self.get_operand_address(mode);
+
+    self.mem_read(address);
+
+    if page_cross {
+      self.cycle(1);
+    }
+  }
+
+  fn skb(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+
+    self.mem_read(address);
   }
 
   fn tya(&mut self) {
@@ -183,7 +201,7 @@ impl CPU {
 
   fn rti(&mut self) {
     let byte = self.pop_from_stack();
-    self.registers.p.set_bits(byte);
+    self.registers.p = CpuFlags::from_bits_truncate(byte);
 
     self.registers.p.remove(CpuFlags::BREAK);
     self.registers.p.insert(CpuFlags::BREAK2);
@@ -263,7 +281,7 @@ impl CPU {
 
   fn plp(&mut self) {
     let byte = self.pop_from_stack();
-    self.registers.p.set_bits(byte);
+    self.registers.p = CpuFlags::from_bits_truncate(byte);
 
     self.registers.p.remove(CpuFlags::BREAK);
     self.registers.p.insert(CpuFlags::BREAK2);
@@ -274,7 +292,7 @@ impl CPU {
 
     let val = self.mem_read(address);
 
-    let result = compare_to - val;
+    let result = compare_to.wrapping_sub(val);
 
     self.registers.p.set(CpuFlags::CARRY, result > 0);
 
@@ -426,7 +444,7 @@ impl CPU {
   fn dec(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
 
-    let result = self.mem_read(address) - 1;
+    let result = self.mem_read(address).wrapping_sub(1);
 
     self.mem_write(address, result);
 
@@ -434,13 +452,13 @@ impl CPU {
   }
 
   fn dex(&mut self) {
-    self.registers.x -= 1;
+    self.registers.x = self.registers.x.wrapping_sub(1);
 
     self.set_zero_and_negative_flags(self.registers.x);
   }
 
   fn dey(&mut self) {
-    self.registers.y -= 1;
+    self.registers.y = self.registers.y.wrapping_sub(1);
 
     self.set_zero_and_negative_flags(self.registers.y);
   }
@@ -565,10 +583,6 @@ impl CPU {
 
   fn lda(&mut self, mode: &AddressingMode) {
     let (address, page_cross) = self.get_operand_address(mode);
-
-    let hex_address = format!("{:X}", address);
-
-    println!("loading from address {hex_address}");
 
     let val = self.mem_read(address);
 

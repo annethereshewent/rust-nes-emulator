@@ -6,7 +6,8 @@ use super::cartridge::Cartridge;
 
 pub struct CPU {
   pub registers: Registers,
-  pub memory: [u8; 0x10000]
+  pub memory: [u8; 0x10000],
+  pub prg_length: usize
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -59,7 +60,8 @@ impl CPU {
         y: 0,
         sp: STACK_START
       },
-      memory: [0; 0x10000]
+      memory: [0; 0x10000],
+      prg_length: cartridge.prg_rom.len()
     };
 
     cpu.load_game(cartridge.prg_rom);
@@ -71,6 +73,17 @@ impl CPU {
     match address {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize],
       0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize],
+      0x8000 ..= 0xffff => {
+        let prg_offset = address - 0x8000;
+
+        if self.prg_length == 0x4000 && prg_offset >= 0x4000 {
+          let actual_address = (prg_offset % 0x4000) + 0x8000;
+
+          self.memory[actual_address as usize]
+        } else {
+          self.memory[address as usize]
+        }
+      }
       _ => self.memory[address as usize]
     }
   }
@@ -101,11 +114,11 @@ impl CPU {
 
   pub fn load_game(&mut self, rom: Vec<u8>) {
     self.memory[0x8000 .. (0x8000 + rom.len())].copy_from_slice(&rom[..]);
-    self.registers.pc = 0x8000;
+    self.registers.pc = self.mem_read_u16(0xfffc);
   }
 
   pub fn tick(&mut self) {
-    let op_code = self.memory[self.registers.pc as usize];
+    let op_code = self.mem_read(self.registers.pc);
 
     self.registers.pc += 1;
 
@@ -119,9 +132,11 @@ impl CPU {
   }
 
   pub fn push_to_stack_u16(&mut self, val: u16) {
-    self.mem_write_u16(STACK_BASE_ADDR + self.registers.sp as u16, val);
+    let lower_byte = (val & 0b11111111) as u8;
+    let upper_byte = (val >> 8) as u8;
 
-    self.registers.sp = self.registers.sp.wrapping_sub(2);
+    self.push_to_stack(upper_byte);
+    self.push_to_stack(lower_byte);
   }
 
   pub fn pop_from_stack(&mut self) -> u8 {
