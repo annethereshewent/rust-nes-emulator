@@ -9,7 +9,7 @@ impl AddressRegister {
     AddressRegister { latch: false, higher: 0, lower: 0 }
   }
 
-  pub fn set(&mut self, val: u16) {
+  fn set(&mut self, val: u16) {
     self.lower = (val & 0b11111111) as u8;
     self.higher = (val >> 8) as u8;
   }
@@ -22,7 +22,7 @@ impl AddressRegister {
     }
 
     // for mirroring
-    if (self.get() > 0x3fff) {
+    if self.get() > 0x3fff {
       self.set(self.get() & 0b11111111111111);
     }
 
@@ -44,6 +44,7 @@ impl AddressRegister {
   }
 
   pub fn get(&self) -> u16 {
-    ((self.higher << 8) as u16) | self.lower as u16
+
+    (self.higher as u16) << 8 | (self.lower as u16)
   }
 }

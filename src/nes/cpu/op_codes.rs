@@ -41,11 +41,11 @@ pub struct Instruction {
   _code: u8,
   mode: AddressingMode,
   name: &'static str,
-  cycles: u8
+  cycles: u16
 }
 
 impl Instruction {
-  pub fn new(code: u8, mode: AddressingMode, name: &'static str, cycles: u8) -> Self {
+  pub fn new(code: u8, mode: AddressingMode, name: &'static str, cycles: u16) -> Self {
     Instruction {
       _code: code,
       mode,
@@ -466,7 +466,7 @@ impl CPU {
   fn inc(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
 
-    let result = self.mem_read(address) + 1;
+    let result = self.mem_read(address).wrapping_add(1);
 
     self.set_zero_and_negative_flags(result);
 
@@ -508,7 +508,7 @@ impl CPU {
   }
 
   fn iny(&mut self) {
-    self.registers.y += 1;
+    self.registers.y = self.registers.y.wrapping_add(1);
 
     self.set_zero_and_negative_flags(self.registers.y);
   }
@@ -844,7 +844,7 @@ impl CPU {
 
     let carry = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
 
-    let result = self.registers.a.wrapping_add(val + carry);
+    let result = self.registers.a.wrapping_add(val).wrapping_add(carry);
 
     if self.registers.a > result {
       self.registers.p.insert(CpuFlags::CARRY);

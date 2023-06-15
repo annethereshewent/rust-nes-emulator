@@ -8,6 +8,11 @@ use self::registers::address::AddressRegister;
 
 use crate::nes::cartridge::Mirroring;
 
+const SCANLINES_PER_FRAME: u16 = 262;
+const CYCLES_PER_SCANLINE: u16 = 341;
+
+const SCREEN_HEIGHT: u16 = 241;
+
 pub struct PPU {
   ctrl: ControlRegister,
   mask: MaskRegister,
@@ -20,7 +25,10 @@ pub struct PPU {
   pub oam_data: [u8; 256],
   pub oam_address: u8,
   pub mirroring: Mirroring,
-  internal_data: u8
+  internal_data: u8,
+  cycles: u16,
+  current_scanline: u16,
+  pub nmi_triggered: bool
 }
 
 impl PPU {
@@ -37,7 +45,33 @@ impl PPU {
       vram: [0; 2048],
       mirroring,
       internal_data: 0,
-      palette_table: [0; 32]
+      palette_table: [0; 32],
+      cycles: 0,
+      current_scanline: 0,
+      nmi_triggered: false
+    }
+  }
+
+  pub fn tick(&mut self, cycles: u16) {
+    self.cycles += cycles;
+
+    if self.cycles >= CYCLES_PER_SCANLINE {
+      self.cycles -= CYCLES_PER_SCANLINE;
+
+      self.current_scanline += 1;
+
+      if self.current_scanline == SCREEN_HEIGHT {
+        // trigger NMI interrupt
+        if self.ctrl.generate_nmi_interrupt() {
+          self.status.insert(StatusRegister::VBLANK_STARTED);
+          self.nmi_triggered = true;
+        }
+      }
+
+      if self.current_scanline == SCANLINES_PER_FRAME {
+        self.current_scanline = 0;
+        self.status.remove(StatusRegister::VBLANK_STARTED);
+      }
     }
   }
 
@@ -53,7 +87,7 @@ impl PPU {
       (Mirroring::HORIZONTAL, 2) => vram_index - 0x400, // 2nd kb of memory
       (Mirroring::HORIZONTAL, 3) => vram_index - 0x800, // 2nd kb of memory
       (Mirroring::VERTICAL, 2) | (Mirroring::VERTICAL, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
-      _ => vram_index
+      _ => vram_index // leave as is
     }
   }
 
@@ -71,11 +105,58 @@ impl PPU {
     self.oam_data[self.oam_address as usize]
   }
 
-  pub fn read_data(&mut self) -> u8 {
+  pub fn write_to_control(&mut self, value: u8) {
+    let tmp = self.ctrl.generate_nmi_interrupt();
+    self.ctrl = ControlRegister::from_bits_truncate(value);
+
+    if !tmp && self.status.contains(StatusRegister::VBLANK_STARTED) && self.ctrl.generate_nmi_interrupt() {
+      self.nmi_triggered = true;
+    }
+  }
+
+  pub fn write_to_mask(&mut self, value: u8) {
+    self.mask = MaskRegister::from_bits_truncate(value);
+  }
+
+  pub fn write_to_oam_address(&mut self, value: u8) {
+    self.oam_address = value;
+  }
+
+  pub fn write_to_oam_data(&mut self, value: u8) {
+    self.oam_data[self.oam_address as usize] = value;
+
+    self.oam_address = self.oam_address.wrapping_add(1);
+  }
+
+  pub fn write_to_scroll(&mut self, value: u8) {
+    self.scroll.set(value);
+  }
+
+  pub fn write_to_ppu_address(&mut self, value: u8) {
+    self.ppu_addr.update(value);
+  }
+
+  pub fn write_to_data(&mut self, value: u8) {
     let address = self.ppu_addr.get();
 
     self.ppu_addr.increment(self.ctrl.vram_address_increment());
 
+    match address {
+      0x0000 ..= 0x1fff => panic!("attempt to write to chr rom"),
+      0x2000 ..=0x2fff => self.vram[self.mirror_vram_index(address) as usize] = value,
+      0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+        let address_mirror = address - 0x10;
+        self.palette_table[(address_mirror - 0x3f00) as usize] = value;
+      }
+      0x3f00 ..=0x3fff => self.palette_table[(address - 0x3f00) as usize] = value,
+      _ => panic!("shouldn't get here")
+    }
+  }
+
+  pub fn read_data(&mut self) -> u8 {
+    let address = self.ppu_addr.get();
+
+    self.ppu_addr.increment(self.ctrl.vram_address_increment());
 
     match address {
       0x0000 ..= 0x1fff => {
@@ -101,7 +182,7 @@ impl PPU {
       {
         self.palette_table[(address - 0x3f00) as usize]
       }
-      _ => todo!("not implemented yet")
+      _ => panic!("shouldn't get here")
     }
   }
 }

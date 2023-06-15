@@ -14,6 +14,8 @@ pub struct CPU {
 const STACK_BASE_ADDR: u16 = 0x0100;
 const STACK_START: u8 = 0xfd;
 
+const NMI_INTERRUPT_VECTOR: u16 = 0xfffa;
+
 pub struct Registers {
   pub a: u8,
   pub pc: u16,
@@ -62,7 +64,14 @@ impl CPU {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize],
       0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => panic!("attempting to read from write only ppu registers"),
       0x2002 => self.ppu.read_status_register(),
-      0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize],
+      0x2004 => self.ppu.read_oam_data(),
+      0x2007 => self.ppu.read_data(),
+      0x2008 ..=0x3fff => {
+        // mirrors
+        let mirrored_address = address & 0b00100000_00000111;
+
+        self.mem_read(mirrored_address)
+      }
       0x8000 ..= 0xffff => {
         let prg_offset = address - 0x8000;
 
@@ -81,7 +90,22 @@ impl CPU {
   pub fn mem_write(&mut self, address: u16, value: u8) {
     match address {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize] = value,
-      0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize] = value,
+      // 0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize] = value,
+      0x2000 => self.ppu.write_to_control(value),
+      0x2001 => self.ppu.write_to_mask(value),
+      0x2002 => panic!("attempting to write to read only ppu register"),
+      0x2003 => self.ppu.write_to_oam_address(value),
+      0x2004 => self.ppu.write_to_oam_data(value),
+      0x2005 => self.ppu.write_to_scroll(value),
+      0x2006 => self.ppu.write_to_ppu_address(value),
+      0x2007 => self.ppu.write_to_data(value),
+      0x2008 ..=0x3fff => {
+        // mirrors
+        let mirrored_address = address & 0b00100000_00000111;
+
+        self.mem_write(mirrored_address, value)
+      }
+
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
       _ => self.memory[address as usize] = value
     };
@@ -113,6 +137,28 @@ impl CPU {
     self.registers.pc += 1;
 
     self.decode(op_code);
+
+    if self.ppu.nmi_triggered {
+      self.trigger_interrupt(NMI_INTERRUPT_VECTOR);
+      self.ppu.nmi_triggered = false;
+    }
+  }
+
+  fn trigger_interrupt(&mut self, interrupt_vector: u16) {
+    let mut flags = self.registers.p.bits().clone();
+
+    self.registers.p.insert(CpuFlags::INTERRUPT_DISABLE);
+
+    // see https://www.nesdev.org/wiki/Status_flags#The_B_flag
+    // bit 4 is cleared, bit 5 is set to 1
+    flags = flags & !(1 << 4);
+    flags = flags | (1 << 5);
+
+    self.push_to_stack_u16(self.registers.pc);
+    self.push_to_stack(flags);
+
+    self.cycle(2);
+    self.registers.pc = self.mem_read_u16(interrupt_vector);
   }
 
   pub fn push_to_stack(&mut self, val: u8) {
@@ -142,7 +188,7 @@ impl CPU {
     upper_byte << 8 | lower_byte
   }
 
-  pub fn cycle(&mut self, _cycles: u8) {
-    // TODO
+  pub fn cycle(&mut self, cycles: u16) {
+    self.ppu.tick(cycles * 3);
   }
 }
