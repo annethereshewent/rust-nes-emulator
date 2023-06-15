@@ -4,7 +4,6 @@ use crate::nes::CPU;
 use crate::nes::cpu::CpuFlags;
 
 use std::string::ToString;
-use strum_macros::Display;
 
 use instruction::AddressingMode;
 

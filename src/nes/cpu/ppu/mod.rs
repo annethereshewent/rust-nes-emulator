@@ -83,11 +83,11 @@ impl PPU {
     let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what quadrant (or screen) is being referred to
 
     match (&self.mirroring, name_table_index) {
-      (Mirroring::HORIZONTAL, 1) => vram_index - 0x400, // first kb of memory
-      (Mirroring::HORIZONTAL, 2) => vram_index - 0x400, // 2nd kb of memory
-      (Mirroring::HORIZONTAL, 3) => vram_index - 0x800, // 2nd kb of memory
-      (Mirroring::VERTICAL, 2) | (Mirroring::VERTICAL, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
-      _ => vram_index // leave as is
+      (Mirroring::Horizontal, 1) => vram_index - 0x400, // first kb of memory
+      (Mirroring::Horizontal, 2) => vram_index - 0x400, // 2nd kb of memory
+      (Mirroring::Horizontal, 3) => vram_index - 0x800, // 2nd kb of memory
+      (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
+      _ => vram_index // either it's four screen which has no mirroring or it's screen 0 or another screen that doesn't need the offset
     }
   }
 
