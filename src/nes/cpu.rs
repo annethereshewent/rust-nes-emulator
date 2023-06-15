@@ -7,6 +7,7 @@ use ppu::PPU;
 pub struct CPU {
   pub registers: Registers,
   pub memory: [u8; 0x10000],
+  pub ppu: PPU,
   pub prg_length: usize
 }
 
@@ -47,7 +48,8 @@ impl CPU {
         sp: STACK_START
       },
       memory: [0; 0x10000],
-      prg_length: cartridge.prg_rom.len()
+      prg_length: cartridge.prg_rom.len(),
+      ppu: PPU::new(cartridge.chr_rom, cartridge.mirroring)
     };
 
     cpu.load_game(cartridge.prg_rom);
@@ -55,9 +57,11 @@ impl CPU {
     cpu
   }
 
-  pub fn mem_read(&self, address: u16) -> u8 {
+  pub fn mem_read(&mut self, address: u16) -> u8 {
     match address {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize],
+      0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => panic!("attempting to read from write only ppu registers"),
+      0x2002 => self.ppu.read_status_register(),
       0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize],
       0x8000 ..= 0xffff => {
         let prg_offset = address - 0x8000;
@@ -91,7 +95,7 @@ impl CPU {
     self.mem_write(address + 1, upper_byte);
   }
 
-  pub fn mem_read_u16(&self, address: u16) -> u16 {
+  pub fn mem_read_u16(&mut self, address: u16) -> u16 {
     let low_byte = self.mem_read(address) as u16;
     let high_byte = self.mem_read(address + 1) as u16;
 

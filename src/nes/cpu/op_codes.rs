@@ -188,7 +188,8 @@ impl CPU {
 
   fn slo(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
-    let val = self.arithmetic_shift_left(self.mem_read(address));
+    let mut val = self.mem_read(address);
+    val = self.arithmetic_shift_left(val);
 
     self.mem_write(address, val);
 
@@ -199,7 +200,8 @@ impl CPU {
 
   fn sre(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
-    let val = self.logical_shift_right(self.mem_read(address));
+    let mut val = self.mem_read(address);
+    val = self.logical_shift_right(val);
 
     self.mem_write(address, val);
 
@@ -208,7 +210,8 @@ impl CPU {
 
   fn rla(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
-    let val = self.rotate_left(self.mem_read(address));
+    let mut val = self.mem_read(address);
+    val = self.rotate_left(val);
 
     self.mem_write(address, val);
 
@@ -219,7 +222,8 @@ impl CPU {
 
   fn rra(&mut self, mode: &AddressingMode) {
     let (address, _) = self.get_operand_address(mode);
-    let val = self.rotate_right(self.mem_read(address));
+    let mut val = self.mem_read(address);
+    val = self.rotate_right(val);
 
     self.mem_write(address, val);
 
@@ -388,7 +392,9 @@ impl CPU {
 
     let (address, _) = self.get_operand_address(mode);
 
-    let val = self.rotate_right(self.mem_read(address));
+    let mut val = self.mem_read(address);
+
+    val = self.rotate_right(val);
 
     self.mem_write(address, val);
   }
@@ -530,7 +536,8 @@ impl CPU {
 
     let (address, _) = self.get_operand_address(mode);
 
-    let val = self.arithmetic_shift_left(self.mem_read(address));
+    let mut val = self.mem_read(address);
+    val = self.arithmetic_shift_left(val);
 
     self.mem_write(address, val);
   }
@@ -552,7 +559,8 @@ impl CPU {
 
     let (address, _) = self.get_operand_address(mode);
 
-    let val = self.logical_shift_right(self.mem_read(address));
+    let mut val = self.mem_read(address);
+    val = self.logical_shift_right(val);
 
     self.mem_write(address, val);
   }
@@ -740,7 +748,7 @@ impl CPU {
     }
   }
 
-  fn get_absolute_offset_address(&self, offset: u8) -> (u16, bool) {
+  fn get_absolute_offset_address(&mut self, offset: u8) -> (u16, bool) {
     let base_address = self.mem_read_u16(self.registers.pc);
 
     let address = base_address.wrapping_add(offset as u16);
