@@ -14,6 +14,7 @@ pub struct PPU {
   scroll: ScrollRegister,
   status: StatusRegister,
   ppu_addr: AddressRegister,
+  pub palette_table: [u8; 32],
   pub chr_rom: Vec<u8>,
   pub vram: [u8; 2048],
   pub oam_data: [u8; 256],
@@ -35,7 +36,24 @@ impl PPU {
       oam_address: 0,
       vram: [0; 2048],
       mirroring,
-      internal_data: 0
+      internal_data: 0,
+      palette_table: [0; 32]
+    }
+  }
+
+  // see https://www.nesdev.org/wiki/Mirroring
+  // also https://bugzmanov.github.io/nes_ebook/chapter_6_1.html
+  fn mirror_vram_index(&self, address: u16) -> u16 {
+    let mirrored_address = address & 0b10111111111111; // mirror down address to range 0x2000 to 0x2eff, where nametables exist
+    let vram_index = mirrored_address - 0x2000;
+    let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what quadrant (or screen) is being referred to
+
+    match (&self.mirroring, name_table_index) {
+      (Mirroring::HORIZONTAL, 1) => vram_index - 0x400, // first kb of memory
+      (Mirroring::HORIZONTAL, 2) => vram_index - 0x400, // 2nd kb of memory
+      (Mirroring::HORIZONTAL, 3) => vram_index - 0x800, // 2nd kb of memory
+      (Mirroring::VERTICAL, 2) | (Mirroring::VERTICAL, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
+      _ => vram_index
     }
   }
 
@@ -59,6 +77,31 @@ impl PPU {
     self.ppu_addr.increment(self.ctrl.vram_address_increment());
 
 
-    self.oam_data[address as usize  ]
+    match address {
+      0x0000 ..= 0x1fff => {
+        let result = self.internal_data;
+
+        self.internal_data = self.chr_rom[address as usize];
+
+        result
+      },
+      0x2000 ..= 0x2fff => {
+        let result = self.internal_data;
+
+        self.internal_data = self.vram[self.mirror_vram_index(address) as usize];
+
+        result
+      }
+      0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
+        let address_mirror = address - 0x10;
+        self.palette_table[(address_mirror - 0x3f00) as usize]
+      }
+
+      0x3f00..=0x3fff =>
+      {
+        self.palette_table[(address - 0x3f00) as usize]
+      }
+      _ => todo!("not implemented yet")
+    }
   }
 }
