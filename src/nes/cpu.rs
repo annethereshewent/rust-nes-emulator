@@ -14,7 +14,7 @@ pub struct CPU {
 const STACK_BASE_ADDR: u16 = 0x0100;
 const STACK_START: u8 = 0xfd;
 
-const NMI_INTERRUPT_VECTOR: u16 = 0xfffa;
+const NMI_INTERRUPT_VECTOR_ADDRESS: u16 = 0xfffa;
 
 pub struct Registers {
   pub a: u8,
@@ -132,19 +132,19 @@ impl CPU {
   }
 
   pub fn tick(&mut self) {
+    if self.ppu.nmi_triggered {
+      self.trigger_interrupt(NMI_INTERRUPT_VECTOR_ADDRESS);
+      self.ppu.nmi_triggered = false;
+    }
+
     let op_code = self.mem_read(self.registers.pc);
 
     self.registers.pc += 1;
 
     self.decode(op_code);
-
-    if self.ppu.nmi_triggered {
-      self.trigger_interrupt(NMI_INTERRUPT_VECTOR);
-      self.ppu.nmi_triggered = false;
-    }
   }
 
-  fn trigger_interrupt(&mut self, interrupt_vector: u16) {
+  fn trigger_interrupt(&mut self, interrupt_vector_address: u16) {
     let mut flags = self.registers.p.bits().clone();
 
     self.registers.p.insert(CpuFlags::INTERRUPT_DISABLE);
@@ -158,7 +158,7 @@ impl CPU {
     self.push_to_stack(flags);
 
     self.cycle(2);
-    self.registers.pc = self.mem_read_u16(interrupt_vector);
+    self.registers.pc = self.mem_read_u16(interrupt_vector_address);
   }
 
   pub fn push_to_stack(&mut self, val: u8) {

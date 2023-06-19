@@ -136,7 +136,7 @@ impl CPU {
     let mode = &instruction.mode;
     let instr_address = format!("{:X}", self.registers.pc - 1);
 
-    println!("found instruction {instruction_name} with mode {mode} at address {instr_address}");
+    // println!("found instruction {instruction_name} with mode {mode} at address {instr_address}");
 
     match instruction.name {
       ADC => self.adc(mode),

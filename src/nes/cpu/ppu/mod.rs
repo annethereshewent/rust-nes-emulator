@@ -1,17 +1,99 @@
 pub mod registers;
+pub mod picture;
 
 use registers::control::ControlRegister;
 use registers::mask::MaskRegister;
 use registers::scroll::ScrollRegister;
 use registers::status::StatusRegister;
+use sdl2::EventPump;
+use sdl2::keyboard::Keycode;
+use sdl2::render::Canvas;
+use sdl2::video::Window;
 use self::registers::address::AddressRegister;
+
+use picture::Picture;
+
+use sdl2::pixels::PixelFormatEnum;
+use sdl2::event::Event;
 
 use crate::nes::cartridge::Mirroring;
 
 const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
 
-const SCREEN_HEIGHT: u16 = 241;
+pub const SCREEN_HEIGHT: u16 = 240;
+pub const SCREEN_WIDTH: u16 = 256;
+
+// per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
+const PALETTE_TABLE: [(u8,u8,u8); 64] = [
+  (84, 84, 84),
+  (0, 30, 116 ),
+  (8, 16, 144),
+  (48, 0, 136),
+  (68, 0, 100),
+  (92, 0, 48),
+  (84, 4, 0),
+  (60, 24, 0),
+  (32, 42, 0),
+  (8, 58, 0),
+  (0, 64, 0),
+  (0, 60, 0),
+  (0, 50, 60),
+  (0, 0, 0),
+  (0, 0, 0),
+  (0, 0, 0),
+
+  (152, 150, 152),
+  (8, 76, 196 ),
+  (48, 50, 236),
+  (92, 30, 228),
+  (136, 20, 176),
+  (160, 20, 100),
+  (152, 34, 32),
+  (120, 60, 0),
+  (84, 90, 0),
+  (40, 114, 0),
+  (8, 124, 0),
+  (0, 118, 40),
+  (0, 102, 120),
+  (0, 0, 0),
+  (0, 0, 0),
+  (0, 0, 0),
+
+  (236, 238, 236),
+  (76, 154, 236 ),
+  (120, 124, 236),
+  (176, 98, 236),
+  (228, 84, 236),
+  (236, 88, 180),
+  (236, 106, 100),
+  (212, 136, 32),
+  (160, 170, 0),
+  (116, 196, 0),
+  (76, 208, 32),
+  (56, 204, 108),
+  (56, 180, 204),
+  (60, 60, 60),
+  (0, 0, 0),
+  (0, 0, 0),
+
+  (236, 238, 236),
+  (168, 204, 236),
+  (188, 188, 236),
+  (212, 178, 236),
+  (236, 174, 236),
+  (236, 174, 212),
+  (236, 180, 176),
+  (228, 196, 144),
+  (204, 210, 120),
+  (180, 222, 120),
+  (168, 226, 144),
+  (152, 226, 180),
+  (160, 214, 228),
+  (160, 162, 160),
+  (0, 0, 0),
+  (0, 0, 0),
+];
 
 pub struct PPU {
   ctrl: ControlRegister,
@@ -28,11 +110,28 @@ pub struct PPU {
   internal_data: u8,
   cycles: u16,
   current_scanline: u16,
-  pub nmi_triggered: bool
+  pub nmi_triggered: bool,
+  canvas: Canvas<Window>,
+  picture: Picture,
+  event_pump: EventPump
 }
 
 impl PPU {
   pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let window = video_subsystem
+      .window("NES Emulator", (SCREEN_WIDTH * 3) as u32, (SCREEN_HEIGHT * 3) as u32)
+      .position_centered()
+      .build()
+      .unwrap();
+
+    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+    canvas.set_scale(3.0, 3.0).unwrap();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
     PPU {
       ctrl: ControlRegister::from_bits_truncate(0b00000000),
       mask: MaskRegister::from_bits_truncate(0b00000000),
@@ -48,7 +147,10 @@ impl PPU {
       palette_table: [0; 32],
       cycles: 0,
       current_scanline: 0,
-      nmi_triggered: false
+      nmi_triggered: false,
+      canvas,
+      picture: Picture::new(),
+      event_pump
     }
   }
 
@@ -57,13 +159,14 @@ impl PPU {
 
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
-
+      self.draw_line();
       self.current_scanline += 1;
 
-      if self.current_scanline == SCREEN_HEIGHT {
+      if self.current_scanline > SCREEN_HEIGHT {
         // trigger NMI interrupt
         if self.ctrl.generate_nmi_interrupt() {
           self.status.insert(StatusRegister::VBLANK_STARTED);
+          self.render();
           self.nmi_triggered = true;
         }
       }
@@ -99,6 +202,40 @@ impl PPU {
     self.status.set(StatusRegister::VBLANK_STARTED, false);
 
     data
+  }
+
+  fn draw_line(&self) {
+
+  }
+
+  fn render(&mut self) {
+    for i in (0..256) {
+      for j in (0..240) {
+        self.picture.set_pixel(i, j, (0, 0, 0))
+      }
+    }
+
+    let creator = self.canvas.texture_creator();
+    let mut texture = creator
+        .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+        .unwrap();
+
+    texture.update(None, &self.picture.data, 256 * 3).unwrap();
+
+    self.canvas.copy(&texture, None, None).unwrap();
+
+    self.canvas.present();
+
+    for event in self.event_pump.poll_iter() {
+      match event {
+        Event::Quit { .. }
+        | Event::KeyDown {
+            keycode: Some(Keycode::Escape),
+            ..
+        } => std::process::exit(0),
+        _ => { /* do nothing */ }
+      }
+    }
   }
 
   pub fn read_oam_data(&self) -> u8 {

@@ -17,7 +17,6 @@ impl NES {
   }
 
   pub fn run(&mut self, filepath: &String) {
-    println!("the filepath is {}", filepath);
     let bytes: Vec<u8> = fs::read(filepath).unwrap();
 
     let cartridge = Cartridge::new(bytes);
