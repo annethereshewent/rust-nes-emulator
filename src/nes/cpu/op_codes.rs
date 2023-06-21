@@ -131,7 +131,6 @@ impl CPU {
   pub fn decode(&mut self, op_code: u8) {
     let instruction = &INSTRUCTIONS[op_code as usize];
 
-
     let mode = &instruction.mode;
 
     // let instr_address = format!("{:X}", self.registers.pc - 1);
@@ -143,7 +142,7 @@ impl CPU {
     // let register_p = format!("{:X}", self.registers.p.bits());
     // let register_sp = format!("{:X}", self.registers.sp);
 
-    // println!("{instr_address} {instruction_name}   A: {register_a} X: {register_x} Y: {register_y} P: {register_p} SP: {register_sp}");
+    // println!("{instr_address} {instruction_name} {mode}  A: {register_a} X: {register_x} Y: {register_y} P: {register_p} SP: {register_sp}");
 
     match instruction.name {
       ADC => self.adc(mode),
@@ -711,14 +710,14 @@ impl CPU {
         (address, false)
       }
       AddressingMode::ZeroPage => {
-        let address = self.memory[self.registers.pc as usize] as u16;
+        let address = self.mem_read(self.registers.pc) as u16;
 
         self.registers.pc += 1;
 
         (address, false)
       }
       AddressingMode::ZeroPageX => {
-        let base_address = self.memory[self.registers.pc as usize];
+        let base_address = self.mem_read(self.registers.pc);
 
         let address = base_address.wrapping_add(self.registers.x) as u16;
 

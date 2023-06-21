@@ -206,17 +206,13 @@ impl PPU {
   }
 
   fn draw_line(&mut self) {
-    let nametable_base = self.ctrl.base_table_address();
-    // let nametable_base = 0;
-    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
-
-    let y = self.current_scanline;
-
-    self.draw_background(nametable_base, chr_rom_bank, y);
-    self.draw_sprites(y);
+    self.draw_background();
+    self.draw_sprites();
   }
 
-  fn draw_sprites(&mut self, y: u16) {
+  fn draw_sprites(&mut self) {
+    let y = self.current_scanline;
+
     for i in (0..self.oam_data.len()).step_by(4) {
       let tile_x = self.oam_data[i+3];
       let tile_y = self.oam_data[i];
@@ -233,7 +229,7 @@ impl PPU {
         y_intersection = self.ctrl.sprite_size() as i16 - 1 - y_intersection as i16;
       }
 
-      if y_intersection >= 0 && y < self.ctrl.sprite_size() as u16 {
+      if y_intersection >= 0 && (y_intersection as u16) < self.ctrl.sprite_size() as u16 {
         let palette_index = attributes & 0b11;
 
         let sprite_palettes = self.get_sprite_palette(palette_index);
@@ -245,28 +241,38 @@ impl PPU {
         let lower_byte = self.chr_rom[(tile_index + y_intersection as u16) as usize];
         let upper_byte = self.chr_rom[(tile_index + y_intersection as u16 + 8) as usize];
 
-        let x_shift = if x_flip {
-          7 - tile_x
-        } else {
-          tile_x
-        };
+        for x in 0..8 {
+          let x_shift = if x_flip {
+            x
+          } else {
+            7 - x
+          };
 
-        let color_index = ((lower_byte >> x_shift) & 0b1) + (((upper_byte >> x_shift) & 0b1) << 1);
+          let color_index = ((lower_byte >> x_shift) & 0b1) + (((upper_byte >> x_shift) & 0b1) << 1);
 
-        let rgb = match color_index {
-          0 => continue,
-          1 => PALETTE_TABLE[sprite_palettes[1] as usize],
-          2 => PALETTE_TABLE[sprite_palettes[2] as usize],
-          3 => PALETTE_TABLE[sprite_palettes[3] as usize],
-          _ => panic!("cant happen")
-        };
+          let rgb = match color_index {
+            0 => continue,
+            1 => PALETTE_TABLE[sprite_palettes[1] as usize],
+            2 => PALETTE_TABLE[sprite_palettes[2] as usize],
+            3 => PALETTE_TABLE[sprite_palettes[3] as usize],
+            _ => panic!("cant happen")
+          };
 
-        self.picture.set_pixel(tile_x as usize, y as usize, rgb);
+          let x_pos = (tile_x + x) as usize;
+
+          self.picture.set_pixel(x_pos, y as usize, rgb);
+        }
+
       }
     }
   }
 
-  fn draw_background(&mut self, nametable_base: u16, chr_rom_bank: u16, y: u16) {
+  fn draw_background(&mut self) {
+    let nametable_base = self.ctrl.base_table_address();
+    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
+
+    let y = self.current_scanline;
+
     for x in 0..SCREEN_WIDTH {
       let tile_pos = (x / 8) + (y / 8) * 32;
       let tile_number = self.vram[self.mirror_vram_index(nametable_base + tile_pos) as usize];
