@@ -159,22 +159,26 @@ impl PPU {
 
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
-      if self.current_scanline >= SCREEN_HEIGHT {
-        // trigger NMI interrupt
-        self.status.insert(StatusRegister::VBLANK_STARTED);
-        if self.ctrl.generate_nmi_interrupt() {
-          self.nmi_triggered = true;
-        }
-      } else {
+      if (self.current_scanline < SCREEN_HEIGHT) {
         self.draw_line();
       }
 
       self.current_scanline += 1;
 
+      if self.current_scanline > SCREEN_HEIGHT {
+        // trigger NMI interrupt
+        self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
+        self.status.insert(StatusRegister::VBLANK_STARTED);
+        if self.ctrl.generate_nmi_interrupt() {
+          self.nmi_triggered = true;
+        }
+      }
+
       if self.current_scanline >= SCANLINES_PER_FRAME {
         self.render();
         self.current_scanline = 0;
         self.status.remove(StatusRegister::VBLANK_STARTED);
+        self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
       }
     }
   }
@@ -214,22 +218,21 @@ impl PPU {
     let y = self.current_scanline;
 
     for i in (0..self.oam_data.len()).step_by(4) {
-      let tile_x = self.oam_data[i+3];
       let tile_y = self.oam_data[i];
-
       let tile_number = self.oam_data[i+1];
       let attributes = self.oam_data[i+2];
+      let tile_x = self.oam_data[i+3];
 
       let y_flip = (attributes >> 7) & 0b1 == 1;
       let x_flip = (attributes >> 6) & 0b1 == 1;
 
-      let mut y_intersection: i16 = (y as i16) - (tile_y as i16);
+      let mut y_pos_in_tile: i16 = (y as i16) - (tile_y as i16);
 
       if y_flip {
-        y_intersection = self.ctrl.sprite_size() as i16 - 1 - y_intersection as i16;
+        y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
       }
 
-      if y_intersection >= 0 && (y_intersection as u16) < self.ctrl.sprite_size() as u16 {
+      if y_pos_in_tile >= 0 && (y_pos_in_tile as u16) < self.ctrl.sprite_size() as u16 {
         let palette_index = attributes & 0b11;
 
         let sprite_palettes = self.get_sprite_palette(palette_index);
@@ -238,8 +241,8 @@ impl PPU {
 
         let tile_index = bank + tile_number as u16 * 16;
 
-        let lower_byte = self.chr_rom[(tile_index + y_intersection as u16) as usize];
-        let upper_byte = self.chr_rom[(tile_index + y_intersection as u16 + 8) as usize];
+        let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16) as usize];
+        let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16 + 8) as usize];
 
         for x in 0..8 {
           let x_shift = if x_flip {
@@ -252,10 +255,7 @@ impl PPU {
 
           let rgb = match color_index {
             0 => continue,
-            1 => PALETTE_TABLE[sprite_palettes[1] as usize],
-            2 => PALETTE_TABLE[sprite_palettes[2] as usize],
-            3 => PALETTE_TABLE[sprite_palettes[3] as usize],
-            _ => panic!("cant happen")
+            _ => PALETTE_TABLE[sprite_palettes[color_index as usize] as usize]
           };
 
           let x_pos = (tile_x + x) as usize;
@@ -296,10 +296,11 @@ impl PPU {
       // finally render the pixel!
       let rgb = match color_index {
         0 => PALETTE_TABLE[self.palette_table[0] as usize],
-        1 => PALETTE_TABLE[bg_palette[1] as usize],
-        2 => PALETTE_TABLE[bg_palette[2] as usize],
-        3 => PALETTE_TABLE[bg_palette[3]as usize],
-        _ => panic!("shouldn't get here")
+        // 1 => PALETTE_TABLE[bg_palette[1] as usize],
+        // 2 => PALETTE_TABLE[bg_palette[2] as usize],
+        // 3 => PALETTE_TABLE[bg_palette[3]as usize],
+        // _ => panic!("shouldn't get here")
+        _ => PALETTE_TABLE[bg_palette[color_index as usize] as usize]
       };
       self.picture.set_pixel(x as usize, y as usize, rgb);
     }

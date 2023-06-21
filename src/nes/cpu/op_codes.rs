@@ -962,7 +962,6 @@ impl CPU {
       if self.registers.pc.wrapping_add(1) & 0xff00 != jump_address & 0xff00 {
         self.cycle(1);
       }
-
       self.registers.pc = jump_address;
     } else {
       self.registers.pc += 1;
