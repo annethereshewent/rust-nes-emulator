@@ -105,10 +105,19 @@ impl CPU {
 
         self.mem_write(mirrored_address, value)
       }
-
+      0x4014 => self.dma_transfer(value),
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
       _ => self.memory[address as usize] = value
     };
+  }
+
+  pub fn dma_transfer(&mut self, value: u8) {
+    let upper = (value as u16) << 8;
+
+    for i in 0..256 {
+      self.ppu.oam_data[self.ppu.oam_address as usize] = self.mem_read(i + upper);
+      self.ppu.oam_address = self.ppu.oam_address.wrapping_add(1);
+    }
   }
 
   pub fn mem_write_u16(&mut self, address: u16, value: u16) {

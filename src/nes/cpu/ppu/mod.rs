@@ -206,15 +206,70 @@ impl PPU {
   }
 
   fn draw_line(&mut self) {
-    // let nametable_base = self.ctrl.base_table_address();
-    let nametable_base = 0;
+    let nametable_base = self.ctrl.base_table_address();
+    // let nametable_base = 0;
     let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
     let y = self.current_scanline;
 
-    for x in 0 .. SCREEN_WIDTH {
+    self.draw_background(nametable_base, chr_rom_bank, y);
+    self.draw_sprites(y);
+  }
+
+  fn draw_sprites(&mut self, y: u16) {
+    for i in (0..self.oam_data.len()).step_by(4) {
+      let tile_x = self.oam_data[i+3];
+      let tile_y = self.oam_data[i];
+
+      let tile_number = self.oam_data[i+1];
+      let attributes = self.oam_data[i+2];
+
+      let y_flip = (attributes >> 7) & 0b1 == 1;
+      let x_flip = (attributes >> 6) & 0b1 == 1;
+
+      let mut y_intersection: i16 = (y as i16) - (tile_y as i16);
+
+      if y_flip {
+        y_intersection = self.ctrl.sprite_size() as i16 - 1 - y_intersection as i16;
+      }
+
+      if y_intersection >= 0 && y < self.ctrl.sprite_size() as u16 {
+        let palette_index = attributes & 0b11;
+
+        let sprite_palettes = self.get_sprite_palette(palette_index);
+
+        let bank = self.ctrl.sprite_pattern_table_address();
+
+        let tile_index = bank + tile_number as u16 * 16;
+
+        let lower_byte = self.chr_rom[(tile_index + y_intersection as u16) as usize];
+        let upper_byte = self.chr_rom[(tile_index + y_intersection as u16 + 8) as usize];
+
+        let x_shift = if x_flip {
+          7 - tile_x
+        } else {
+          tile_x
+        };
+
+        let color_index = ((lower_byte >> x_shift) & 0b1) + (((upper_byte >> x_shift) & 0b1) << 1);
+
+        let rgb = match color_index {
+          0 => continue,
+          1 => PALETTE_TABLE[sprite_palettes[1] as usize],
+          2 => PALETTE_TABLE[sprite_palettes[2] as usize],
+          3 => PALETTE_TABLE[sprite_palettes[3] as usize],
+          _ => panic!("cant happen")
+        };
+
+        self.picture.set_pixel(tile_x as usize, y as usize, rgb);
+      }
+    }
+  }
+
+  fn draw_background(&mut self, nametable_base: u16, chr_rom_bank: u16, y: u16) {
+    for x in 0..SCREEN_WIDTH {
       let tile_pos = (x / 8) + (y / 8) * 32;
-      let tile_number = self.vram[(nametable_base + tile_pos) as usize];
+      let tile_number = self.vram[self.mirror_vram_index(nametable_base + tile_pos) as usize];
       let tile_index = chr_rom_bank + (tile_number as u16 * 16);
 
       let x_pos_in_tile = x % 8;
@@ -240,16 +295,26 @@ impl PPU {
         3 => PALETTE_TABLE[bg_palette[3]as usize],
         _ => panic!("shouldn't get here")
       };
-
       self.picture.set_pixel(x as usize, y as usize, rgb);
     }
+  }
+
+  fn get_sprite_palette(&self, palette_index: u8) -> [u8; 4] {
+    let start = 0x11 + (palette_index * 4) as usize;
+
+    [
+      0,
+      self.palette_table[start],
+      self.palette_table[start+1],
+      self.palette_table[start+2]
+    ]
   }
 
   // see https://bugzmanov.github.io/nes_ebook/chapter_6_4.html on rendering colors and meta-tiles
   fn get_bg_palette(&self, nametable_base: usize, tile_column: usize, tile_row: usize) -> [u8; 4] {
     let attribute_table_index = (tile_row / 4) * 8 + (tile_column / 4);
 
-    let attr_byte = self.vram[nametable_base + 0x3c0 + attribute_table_index as usize];
+    let attr_byte = self.vram[self.mirror_vram_index((nametable_base + 0x3c0 + attribute_table_index) as u16) as usize];
 
     let x_meta_tile_pos = (tile_column % 4) / 2;
     let y_meta_tile_pos = (tile_row % 4) / 2;
