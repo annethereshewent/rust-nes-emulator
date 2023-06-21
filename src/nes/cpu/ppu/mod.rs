@@ -162,7 +162,6 @@ impl PPU {
       if self.current_scanline >= SCREEN_HEIGHT {
         // trigger NMI interrupt
         self.status.insert(StatusRegister::VBLANK_STARTED);
-        self.render();
         if self.ctrl.generate_nmi_interrupt() {
           self.nmi_triggered = true;
         }
@@ -173,6 +172,7 @@ impl PPU {
       self.current_scanline += 1;
 
       if self.current_scanline >= SCANLINES_PER_FRAME {
+        self.render();
         self.current_scanline = 0;
         self.status.remove(StatusRegister::VBLANK_STARTED);
       }
