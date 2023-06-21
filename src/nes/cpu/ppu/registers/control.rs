@@ -33,7 +33,7 @@ impl ControlRegister {
   }
 
   pub fn background_pattern_table_addr(&self) -> u16 {
-    if self.contains(ControlRegister::BACKGROUND_PATTERN_TABLE_ADDR) { 0x1000 } else { 0}
+    if self.contains(ControlRegister::BACKGROUND_PATTERN_TABLE_ADDR) { 0x1000 } else { 0 }
   }
 
   pub fn sprite_size(&self) -> u8 {

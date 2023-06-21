@@ -130,7 +130,7 @@ impl PPU {
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     canvas.set_scale(3.0, 3.0).unwrap();
 
-    let mut event_pump = sdl_context.event_pump().unwrap();
+    let event_pump = sdl_context.event_pump().unwrap();
 
     PPU {
       ctrl: ControlRegister::from_bits_truncate(0b00000000),
@@ -159,19 +159,20 @@ impl PPU {
 
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
-      self.draw_line();
-      self.current_scanline += 1;
-
-      if self.current_scanline > SCREEN_HEIGHT {
+      if self.current_scanline >= SCREEN_HEIGHT {
         // trigger NMI interrupt
         if self.ctrl.generate_nmi_interrupt() {
           self.status.insert(StatusRegister::VBLANK_STARTED);
           self.render();
           self.nmi_triggered = true;
         }
+      } else {
+        self.draw_line();
       }
 
-      if self.current_scanline == SCANLINES_PER_FRAME {
+      self.current_scanline += 1;
+
+      if self.current_scanline >= SCANLINES_PER_FRAME {
         self.current_scanline = 0;
         self.status.remove(StatusRegister::VBLANK_STARTED);
       }
@@ -183,7 +184,7 @@ impl PPU {
   fn mirror_vram_index(&self, address: u16) -> u16 {
     let mirrored_address = address & 0b10111111111111; // mirror down address to range 0x2000 to 0x2eff, where nametables exist
     let vram_index = mirrored_address - 0x2000;
-    let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what quadrant (or screen) is being referred to
+    let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what nametable is being referred to
 
     match (&self.mirroring, name_table_index) {
       (Mirroring::Horizontal, 1) => vram_index - 0x400, // first kb of memory
@@ -204,17 +205,69 @@ impl PPU {
     data
   }
 
-  fn draw_line(&self) {
+  fn draw_line(&mut self) {
+    // let nametable_base = self.ctrl.base_table_address();
+    let nametable_base = 0;
+    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
+    let y = self.current_scanline;
+
+    for x in 0 .. SCREEN_WIDTH {
+      let tile_pos = (x / 8) + (y / 8) * 32;
+      let tile_number = self.vram[(nametable_base + tile_pos) as usize];
+      let tile_index = chr_rom_bank + (tile_number as u16 * 16);
+
+      let x_pos_in_tile = x % 8;
+      let y_pos_in_tile = y % 8;
+
+      let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile) as usize];
+      let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile + 8) as usize];
+
+      let x_shift = 7 - x_pos_in_tile;
+
+      let color_index = ((lower_byte >> x_shift) & 0b1) + (((upper_byte >> x_shift) & 0b1) << 1);
+
+      let tile_column = x / 8;
+      let tile_row = y / 8;
+
+      let bg_palette = self.get_bg_palette(nametable_base as usize, tile_column as usize, tile_row as usize);
+
+      // finally render the pixel!
+      let rgb = match color_index {
+        0 => PALETTE_TABLE[self.palette_table[0] as usize],
+        1 => PALETTE_TABLE[bg_palette[1] as usize],
+        2 => PALETTE_TABLE[bg_palette[2] as usize],
+        3 => PALETTE_TABLE[bg_palette[3]as usize],
+        _ => panic!("shouldn't get here")
+      };
+
+      self.picture.set_pixel(x as usize, y as usize, rgb);
+    }
+  }
+
+  // see https://bugzmanov.github.io/nes_ebook/chapter_6_4.html on rendering colors and meta-tiles
+  fn get_bg_palette(&self, nametable_base: usize, tile_column: usize, tile_row: usize) -> [u8; 4] {
+    let attribute_table_index = (tile_row / 4) * 8 + (tile_column / 4);
+
+    let attr_byte = self.vram[nametable_base + 0x3c0 + attribute_table_index as usize];
+
+    let x_meta_tile_pos = (tile_column % 4) / 2;
+    let y_meta_tile_pos = (tile_row % 4) / 2;
+
+    let palette_index = match (x_meta_tile_pos, y_meta_tile_pos) {
+      (0,0) => attr_byte & 0b11,
+      (0,1) => (attr_byte >> 4) & 0b11,
+      (1,0) => (attr_byte >> 2) & 0b11,
+      (1,1) => (attr_byte >> 6) & 0b11,
+      _ => panic!("should not get here")
+    };
+
+    let palette_start: usize = 1 + (palette_index as usize * 4);
+
+    [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
   }
 
   fn render(&mut self) {
-    for i in (0..256) {
-      for j in (0..240) {
-        self.picture.set_pixel(i, j, (0, 0, 0))
-      }
-    }
-
     let creator = self.canvas.texture_creator();
     let mut texture = creator
         .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
