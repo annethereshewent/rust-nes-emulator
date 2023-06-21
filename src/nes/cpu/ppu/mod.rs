@@ -161,9 +161,9 @@ impl PPU {
       self.cycles -= CYCLES_PER_SCANLINE;
       if self.current_scanline >= SCREEN_HEIGHT {
         // trigger NMI interrupt
+        self.status.insert(StatusRegister::VBLANK_STARTED);
+        self.render();
         if self.ctrl.generate_nmi_interrupt() {
-          self.status.insert(StatusRegister::VBLANK_STARTED);
-          self.render();
           self.nmi_triggered = true;
         }
       } else {

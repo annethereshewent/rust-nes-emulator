@@ -3,8 +3,6 @@ pub mod instruction;
 use crate::nes::CPU;
 use crate::nes::cpu::CpuFlags;
 
-use std::string::ToString;
-
 use instruction::AddressingMode;
 
 use instruction::Opname::{
@@ -129,14 +127,23 @@ lazy_static! {
 
 
 impl CPU {
+
   pub fn decode(&mut self, op_code: u8) {
     let instruction = &INSTRUCTIONS[op_code as usize];
 
-    let instruction_name = instruction.name.to_string();
-    let mode = &instruction.mode;
-    let instr_address = format!("{:X}", self.registers.pc - 1);
 
-    // println!("found instruction {instruction_name} with mode {mode} at address {instr_address}");
+    let mode = &instruction.mode;
+
+    // let instr_address = format!("{:X}", self.registers.pc - 1);
+    // let instruction_name = instruction.name.to_string();
+
+    // let register_a = format!("{:X}", self.registers.a);
+    // let register_x = format!("{:X}", self.registers.x);
+    // let register_y = format!("{:X}", self.registers.y);
+    // let register_p = format!("{:X}", self.registers.p.bits());
+    // let register_sp = format!("{:X}", self.registers.sp);
+
+    // println!("{instr_address} {instruction_name}   A: {register_a} X: {register_x} Y: {register_y} P: {register_p} SP: {register_sp}");
 
     match instruction.name {
       ADC => self.adc(mode),
@@ -554,7 +561,7 @@ impl CPU {
   }
 
   fn inx(&mut self) {
-    self.registers.x += 1;
+    self.registers.x = self.registers.x.wrapping_add(1);
 
     self.set_zero_and_negative_flags(self.registers.x);
   }
@@ -869,7 +876,8 @@ impl CPU {
       self.registers.p.remove(CpuFlags::ZERO);
     }
 
-    if result & (0b1 << 7) == 1 {
+
+    if (result >> 7) & 0b1 == 1 {
       self.registers.p.insert(CpuFlags::NEGATIVE);
     } else {
       self.registers.p.remove(CpuFlags::NEGATIVE);
@@ -955,6 +963,8 @@ impl CPU {
       if self.registers.pc.wrapping_add(1) & 0xff00 != jump_address & 0xff00 {
         self.cycle(1);
       }
+
+      self.registers.pc = jump_address;
     } else {
       self.registers.pc += 1;
     }
