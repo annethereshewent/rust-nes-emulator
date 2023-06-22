@@ -72,6 +72,7 @@ impl CPU {
 
         self.mem_read(mirrored_address)
       }
+      0x4016 => self.ppu.joypad.read(),
       0x8000 ..= 0xffff => {
         let prg_offset = address - 0x8000;
 
@@ -106,6 +107,7 @@ impl CPU {
         self.mem_write(mirrored_address, value)
       }
       0x4014 => self.dma_transfer(value),
+      0x4016 => self.ppu.joypad.write(value),
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
       _ => self.memory[address as usize] = value
     };

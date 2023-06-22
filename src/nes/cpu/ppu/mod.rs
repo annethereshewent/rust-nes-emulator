@@ -1,14 +1,19 @@
 pub mod registers;
 pub mod picture;
+pub mod joypad;
+
+use std::collections::HashMap;
 
 use registers::control::ControlRegister;
 use registers::mask::MaskRegister;
 use registers::scroll::ScrollRegister;
 use registers::status::StatusRegister;
 use sdl2::EventPump;
+use sdl2::controller::GameController;
 use sdl2::keyboard::Keycode;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
+use self::joypad::{ButtonStatus, Joypad};
 use self::registers::address::AddressRegister;
 
 use picture::Picture;
@@ -23,6 +28,7 @@ const CYCLES_PER_SCANLINE: u16 = 341;
 
 pub const SCREEN_HEIGHT: u16 = 240;
 pub const SCREEN_WIDTH: u16 = 256;
+
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 const PALETTE_TABLE: [(u8,u8,u8); 64] = [
@@ -113,13 +119,47 @@ pub struct PPU {
   pub nmi_triggered: bool,
   canvas: Canvas<Window>,
   picture: Picture,
-  event_pump: EventPump
+  event_pump: EventPump,
+  _controller: Option<GameController>,
+  pub joypad: Joypad,
+  joypad_map: HashMap<u8, ButtonStatus>
 }
 
 impl PPU {
   pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+
+    let game_controller_subsystem = sdl_context.game_controller().unwrap();
+
+    let available = game_controller_subsystem
+        .num_joysticks()
+        .map_err(|e| format!("can't enumerate joysticks: {}", e)).unwrap();
+
+    let controller = (0..available)
+      .find_map(|id| {
+        match game_controller_subsystem.open(id) {
+          Ok(c) => {
+            Some(c)
+          }
+          Err(_) => {
+            None
+          }
+        }
+      });
+
+    let mut joypad_map = HashMap::new();
+
+    joypad_map.insert(0, ButtonStatus::BUTTON_A);
+    joypad_map.insert(2, ButtonStatus::BUTTON_B);
+
+    joypad_map.insert(6, ButtonStatus::START);
+    joypad_map.insert(4, ButtonStatus::SELECT);
+
+    joypad_map.insert(11, ButtonStatus::UP);
+    joypad_map.insert(12, ButtonStatus::DOWN);
+    joypad_map.insert(13, ButtonStatus::LEFT);
+    joypad_map.insert(14, ButtonStatus::RIGHT);
 
     let window = video_subsystem
       .window("NES Emulator", (SCREEN_WIDTH * 3) as u32, (SCREEN_HEIGHT * 3) as u32)
@@ -150,7 +190,10 @@ impl PPU {
       nmi_triggered: false,
       canvas,
       picture: Picture::new(),
-      event_pump
+      event_pump,
+      _controller: controller,
+      joypad_map,
+      joypad: Joypad::new()
     }
   }
 
@@ -269,7 +312,7 @@ impl PPU {
             _ => PALETTE_TABLE[sprite_palettes[color_index as usize] as usize]
           };
 
-          let x_pos = (tile_x + x) as usize;
+          let x_pos = (tile_x as usize + x) as usize;
 
           self.picture.set_pixel(x_pos, y as usize, rgb);
         }
@@ -369,6 +412,16 @@ impl PPU {
             keycode: Some(Keycode::Escape),
             ..
         } => std::process::exit(0),
+        Event::JoyButtonDown { button_idx, .. } => {
+          if let Some(button) = self.joypad_map.get(&button_idx){
+            self.joypad.set_button(*button, true);
+          }
+        }
+        Event::JoyButtonUp { button_idx, .. } => {
+          if let Some(button) = self.joypad_map.get(&button_idx){
+            self.joypad.set_button(*button, false);
+          }
+        }
         _ => { /* do nothing */ }
       }
     }
