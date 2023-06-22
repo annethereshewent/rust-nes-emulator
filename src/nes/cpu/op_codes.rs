@@ -364,11 +364,12 @@ impl CPU {
 
     let x_and_a = self.registers.x & self.registers.a;
 
-    let (result, carry) = x_and_a.overflowing_sub(val);
+    let result = x_and_a.wrapping_sub(val);
+
+    self.registers.p.set(CpuFlags::CARRY, val <= x_and_a);
 
     self.registers.x = result;
 
-    self.registers.p.set(CpuFlags::CARRY, carry);
     self.set_zero_and_negative_flags(result);
   }
 
@@ -431,9 +432,9 @@ impl CPU {
   }
 
   fn rotate_left(&mut self, mut val: u8) -> u8 {
-    self.registers.p.set(CpuFlags::CARRY, val >> 7 == 1);
-
     let carry: u8 = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
+
+    self.registers.p.set(CpuFlags::CARRY, val >> 7 == 1);
 
     val = (val << 1) | carry;
 
@@ -910,17 +911,16 @@ impl CPU {
 
     let carry = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
 
-    let result = self.registers.a.wrapping_add(val).wrapping_add(carry);
+    let (result, is_carry) = self.registers.a.overflowing_add(val);
+    let (result2, is_carry2) = result.overflowing_add(carry);
 
-    if self.registers.a > result {
-      self.registers.p.insert(CpuFlags::CARRY);
-    } else {
-      self.registers.p.remove(CpuFlags::CARRY);
-    }
+    self.registers.p.set(CpuFlags::CARRY, is_carry || is_carry2);
 
-    self.registers.p.set(CpuFlags::OVERFLOW, (val ^ result) & (result ^ self.registers.a) & 0b10000000 != 0);
+    self.registers.p.set(CpuFlags::OVERFLOW, (val ^ result2) & (result2 ^ self.registers.a) & 0x80 != 0);
 
-    self.registers.a = result;
+    self.registers.a = result2;
+
+    self.set_zero_and_negative_flags(self.registers.a);
 
     if page_cross {
       self.cycle(1);
