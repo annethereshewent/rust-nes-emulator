@@ -285,7 +285,16 @@ impl CPU {
 
     self.mem_write(address, val);
 
-    self.registers.a &= val;
+    let carry = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
+
+    let (result, is_carry) = self.registers.a.overflowing_add(val);
+    let (result2, is_carry2) = result.overflowing_add(carry);
+
+    self.registers.p.set(CpuFlags::CARRY, is_carry || is_carry2);
+
+    self.registers.p.set(CpuFlags::OVERFLOW, (val ^ result2) & (result2 ^ self.registers.a) & 0x80 != 0);
+
+    self.registers.a = result2;
 
     self.set_zero_and_negative_flags(self.registers.a);
   }
@@ -458,9 +467,9 @@ impl CPU {
   }
 
   fn rotate_right(&mut self, mut val: u8) -> u8 {
-    self.registers.p.set(CpuFlags::CARRY, val & 0b1 == 1);
-
     let carry: u8 = if self.registers.p.contains(CpuFlags::CARRY) { 1 } else { 0 };
+
+    self.registers.p.set(CpuFlags::CARRY, val & 0b1 == 1);
 
     val = (val >> 1) | (carry << 7);
 
@@ -758,11 +767,9 @@ impl CPU {
       AddressingMode::Indirect => {
         let indirect_address = self.mem_read_u16(self.registers.pc);
 
-        // per https://github.com/bugzmanov/nes_ebook/blob/master/code/ch8/src/cpu.rs
         // if the address ends in ff there is a bug where the lower byte of the address
         // wraps around and starts at 00. (ie: if address is 0x30ff, upper byte is at 0x3000).
         // Otherwise it works exactly as it should
-
         let address = if indirect_address & 0xff == 0xff   {
           let lower_byte = self.mem_read(indirect_address) as u16;
           let upper_byte = self.mem_read(indirect_address & 0xff00) as u16;
@@ -962,6 +969,7 @@ impl CPU {
       if self.registers.pc.wrapping_add(1) & 0xff00 != jump_address & 0xff00 {
         self.cycle(1);
       }
+
       self.registers.pc = jump_address;
     } else {
       self.registers.pc += 1;

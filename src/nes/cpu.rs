@@ -138,6 +138,7 @@ impl CPU {
   pub fn load_game(&mut self, rom: Vec<u8>) {
     self.memory[0x8000 .. (0x8000 + rom.len())].copy_from_slice(&rom[..]);
     self.registers.pc = self.mem_read_u16(0xfffc);
+    // self.registers.pc = 0xc000;
   }
 
   pub fn tick(&mut self) {

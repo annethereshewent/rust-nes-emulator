@@ -159,7 +159,7 @@ impl PPU {
 
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
-      if (self.current_scanline < SCREEN_HEIGHT) {
+      if self.current_scanline < SCREEN_HEIGHT {
         self.draw_line();
       }
 
