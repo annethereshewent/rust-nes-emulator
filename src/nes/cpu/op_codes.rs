@@ -264,6 +264,8 @@ impl CPU {
     self.mem_write(address, val);
 
     self.registers.a ^= val;
+
+    self.set_zero_and_negative_flags(self.registers.a);
   }
 
   fn rla(&mut self, mode: &AddressingMode) {
@@ -429,6 +431,8 @@ impl CPU {
     val = self.rotate_left(val);
 
     self.mem_write(address, val);
+
+    self.set_zero_and_negative_flags(val);
   }
 
   fn rotate_left(&mut self, mut val: u8) -> u8 {
@@ -465,6 +469,8 @@ impl CPU {
     val = self.rotate_right(val);
 
     self.mem_write(address, val);
+
+    self.set_zero_and_negative_flags(val);
   }
 
   fn rotate_right(&mut self, mut val: u8) -> u8 {
@@ -505,6 +511,7 @@ impl CPU {
 
   fn pla(&mut self) {
     self.registers.a = self.pop_from_stack();
+    self.set_zero_and_negative_flags(self.registers.a);
   }
 
   fn plp(&mut self) {
@@ -648,13 +655,13 @@ impl CPU {
   }
 
   fn brk(&mut self) {
-    self.push_to_stack_u16(self.registers.pc);
+    self.registers.p.insert(CpuFlags::BREAK);
+    self.registers.p.insert(CpuFlags::BREAK2);
+
+    self.push_to_stack_u16(self.registers.pc+1);
     self.push_to_stack(self.registers.p.bits());
 
     let address = self.mem_read_u16(0xfffe);
-
-    self.registers.p.insert(CpuFlags::BREAK);
-    self.registers.p.insert(CpuFlags::BREAK2);
 
     self.registers.pc = address;
   }
