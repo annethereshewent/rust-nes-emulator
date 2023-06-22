@@ -158,6 +158,10 @@ impl PPU {
     self.cycles += cycles;
 
     if self.cycles >= CYCLES_PER_SCANLINE {
+      if self.sprite_zero_hit(self.cycles) {
+        self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
+      }
+
       self.cycles -= CYCLES_PER_SCANLINE;
       if self.current_scanline < SCREEN_HEIGHT {
         self.draw_line();
@@ -181,6 +185,13 @@ impl PPU {
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
       }
     }
+  }
+
+  fn sprite_zero_hit(&self, cycles: u16) -> bool {
+    let y = self.oam_data[0];
+    let x = self.oam_data[3];
+
+    y as u16 == self.current_scanline && x as u16 <= cycles && self.mask.contains(MaskRegister::SHOW_SPRITES)
   }
 
   // see https://www.nesdev.org/wiki/Mirroring
