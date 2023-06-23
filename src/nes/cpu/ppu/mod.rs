@@ -338,6 +338,10 @@ impl PPU {
 
           let x_pos = (tile_x as usize + x) as usize;
 
+          if x_pos >= SCREEN_WIDTH as usize {
+            continue;
+          }
+
           let is_pixel_visible = !(sprite_behind_background && self.background_pixels_drawn[x_pos]);
 
           if is_pixel_visible {
@@ -355,23 +359,28 @@ impl PPU {
     let second_nametable_base = match (nametable_base, &self.mirroring) {
       (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
       (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) => 0x2000,
-      _ => todo!("not implemented yet")
+      (0x2000, Mirroring::Horizontal) | (0x2400, Mirroring::Horizontal) => 0x2800,
+      (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
+      _ => todo!("not yet implemented")
     };
 
     let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
     let y = self.current_scanline;
 
-    let scrolled_y = y + self.scroll.y as u16;
+    let mut scrolled_y = y + self.scroll.y as u16;
 
     for x in 0..SCREEN_WIDTH {
-      let  scrolled_x = x + self.scroll.x as u16;
+      let mut scrolled_x = x + self.scroll.x as u16;
+      let mut current_nametable = nametable_base;
 
-      let (scrolled_x, current_nametable) = if scrolled_x >= SCREEN_WIDTH {
-         (scrolled_x % SCREEN_WIDTH, second_nametable_base)
-      } else {
-        (scrolled_x, nametable_base)
-      };
+      if scrolled_x >= SCREEN_WIDTH && matches!(&self.mirroring, Mirroring::Vertical) {
+        scrolled_x %= SCREEN_WIDTH;
+        current_nametable = second_nametable_base;
+      } else if scrolled_y >= SCREEN_HEIGHT && matches!(&self.mirroring, Mirroring::Horizontal) {
+        scrolled_y %= SCREEN_HEIGHT;
+        current_nametable = second_nametable_base;
+      }
 
       let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
 
@@ -402,7 +411,11 @@ impl PPU {
 
         _ => PALETTE_TABLE[bg_palette[color_index as usize] as usize]
       };
-      self.picture.set_pixel(x as usize, y as usize, rgb);
+      if x < SCREEN_WIDTH && y < SCREEN_HEIGHT {
+        self.picture.set_pixel(x as usize, y as usize, rgb);
+      } else {
+        println!("x and y overflow: {x},{y}");
+      }
     }
   }
 
