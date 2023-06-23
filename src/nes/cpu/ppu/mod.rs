@@ -342,37 +342,52 @@ impl PPU {
 
   fn draw_background(&mut self) {
     let nametable_base = self.ctrl.base_table_address();
+
+    let second_nametable_base = match (nametable_base, &self.mirroring) {
+      (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
+      (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) => 0x2000,
+      _ => todo!("not implemented yet")
+    };
+
     let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
     let y = self.current_scanline;
 
+    let scrolled_y = y + self.scroll.y as u16;
+
     for x in 0..SCREEN_WIDTH {
-      let tile_pos = (x / 8) + (y / 8) * 32;
-      let tile_number = self.vram[self.mirror_vram_index(nametable_base + tile_pos) as usize];
+      let  scrolled_x = x + self.scroll.x as u16;
+
+      let (scrolled_x, current_nametable) = if scrolled_x >= SCREEN_WIDTH {
+         (scrolled_x % SCREEN_WIDTH, second_nametable_base)
+      } else {
+        (scrolled_x, nametable_base)
+      };
+
+      let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
+
+      let tile_number = self.vram[self.mirror_vram_index(current_nametable + tile_pos) as usize];
       let tile_index = chr_rom_bank + (tile_number as u16 * 16);
 
-      let x_pos_in_tile = x % 8;
-      let y_pos_in_tile = y % 8;
+      let x_pos_in_tile = scrolled_x % 8;
+      let y_pos_in_tile = scrolled_y % 8;
 
       let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile) as usize];
       let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile + 8) as usize];
 
-      let x_shift = 7 - x_pos_in_tile;
+      let bit_pos = 7 - x_pos_in_tile;
 
-      let color_index = ((lower_byte >> x_shift) & 0b1) + (((upper_byte >> x_shift) & 0b1) << 1);
+      let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
 
-      let tile_column = x / 8;
-      let tile_row = y / 8;
+      let tile_column = scrolled_x / 8;
+      let tile_row = scrolled_y / 8;
 
-      let bg_palette = self.get_bg_palette(nametable_base as usize, tile_column as usize, tile_row as usize);
+      let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
 
       // finally render the pixel!
       let rgb = match color_index {
         0 => PALETTE_TABLE[self.palette_table[0] as usize],
-        // 1 => PALETTE_TABLE[bg_palette[1] as usize],
-        // 2 => PALETTE_TABLE[bg_palette[2] as usize],
-        // 3 => PALETTE_TABLE[bg_palette[3]as usize],
-        // _ => panic!("shouldn't get here")
+
         _ => PALETTE_TABLE[bg_palette[color_index as usize] as usize]
       };
       self.picture.set_pixel(x as usize, y as usize, rgb);
