@@ -123,7 +123,8 @@ pub struct PPU {
   _controller: Option<GameController>,
   pub joypad: Joypad,
   joypad_map: HashMap<u8, ButtonStatus>,
-  key_map: HashMap<Keycode, ButtonStatus>
+  key_map: HashMap<Keycode, ButtonStatus>,
+  background_pixels_drawn: Vec<bool>
 }
 
 impl PPU {
@@ -212,7 +213,8 @@ impl PPU {
       _controller: controller,
       joypad_map,
       key_map,
-      joypad: Joypad::new()
+      joypad: Joypad::new(),
+      background_pixels_drawn: Vec::new()
     }
   }
 
@@ -283,6 +285,7 @@ impl PPU {
   }
 
   fn draw_line(&mut self) {
+    self.background_pixels_drawn = Vec::new();
     self.draw_background();
     self.draw_sprites();
   }
@@ -298,6 +301,8 @@ impl PPU {
 
       let y_flip = (attributes >> 7) & 0b1 == 1;
       let x_flip = (attributes >> 6) & 0b1 == 1;
+
+      let sprite_behind_background = (attributes >> 5) & 0b1 == 1;
 
       let mut y_pos_in_tile: i16 = (y as i16) - (tile_y as i16);
 
@@ -333,7 +338,11 @@ impl PPU {
 
           let x_pos = (tile_x as usize + x) as usize;
 
-          self.picture.set_pixel(x_pos, y as usize, rgb);
+          let is_pixel_visible = !(sprite_behind_background && self.background_pixels_drawn[x_pos]);
+
+          if is_pixel_visible {
+            self.picture.set_pixel(x_pos, y as usize, rgb);
+          }
         }
 
       }
@@ -383,6 +392,9 @@ impl PPU {
       let tile_row = scrolled_y / 8;
 
       let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
+
+
+      self.background_pixels_drawn.push(color_index != 0);
 
       // finally render the pixel!
       let rgb = match color_index {
