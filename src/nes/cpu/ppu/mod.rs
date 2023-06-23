@@ -122,7 +122,8 @@ pub struct PPU {
   event_pump: EventPump,
   _controller: Option<GameController>,
   pub joypad: Joypad,
-  joypad_map: HashMap<u8, ButtonStatus>
+  joypad_map: HashMap<u8, ButtonStatus>,
+  key_map: HashMap<Keycode, ButtonStatus>
 }
 
 impl PPU {
@@ -147,6 +148,23 @@ impl PPU {
           }
         }
       });
+
+    let mut key_map = HashMap::new();
+
+    key_map.insert(Keycode::W, ButtonStatus::UP);
+    key_map.insert(Keycode::A, ButtonStatus::LEFT);
+    key_map.insert(Keycode::S, ButtonStatus::DOWN);
+    key_map.insert(Keycode::D, ButtonStatus::RIGHT);
+
+    key_map.insert(Keycode::Space, ButtonStatus::BUTTON_A);
+    key_map.insert(Keycode::K, ButtonStatus::BUTTON_A);
+
+    key_map.insert(Keycode::LShift, ButtonStatus::BUTTON_B);
+    key_map.insert(Keycode::J, ButtonStatus::BUTTON_B);
+
+    key_map.insert(Keycode::Tab, ButtonStatus::SELECT);
+    key_map.insert(Keycode::Return, ButtonStatus::START);
+
 
     let mut joypad_map = HashMap::new();
 
@@ -193,6 +211,7 @@ impl PPU {
       event_pump,
       _controller: controller,
       joypad_map,
+      key_map,
       joypad: Joypad::new()
     }
   }
@@ -412,6 +431,16 @@ impl PPU {
             keycode: Some(Keycode::Escape),
             ..
         } => std::process::exit(0),
+        Event::KeyDown { keycode, .. }=> {
+          if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
+            self.joypad.set_button(*button, true);
+          }
+        }
+        Event::KeyUp { keycode, .. } => {
+          if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
+            self.joypad.set_button(*button, false);
+          }
+        }
         Event::JoyButtonDown { button_idx, .. } => {
           if let Some(button) = self.joypad_map.get(&button_idx){
             self.joypad.set_button(*button, true);
