@@ -62,7 +62,7 @@ impl CPU {
   pub fn mem_read(&mut self, address: u16) -> u8 {
     match address {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize],
-      0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => panic!("attempting to read from write only ppu registers"),
+      0x2000 | 0x2001 | 0x2003 | 0x2005 | 0x2006 | 0x4014 => 0,
       0x2002 => self.ppu.read_status_register(),
       0x2004 => self.ppu.read_oam_data(),
       0x2007 => self.ppu.read_data(),
@@ -84,7 +84,7 @@ impl CPU {
           self.memory[address as usize]
         }
       }
-      _ => self.memory[address as usize]
+      _ => 0
     }
   }
 

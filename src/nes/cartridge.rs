@@ -30,6 +30,10 @@ impl Cartridge {
     }
 
     let mapper_number = ((rom[7] >> 4) & 0b1111) << 4 | (rom[6] >> 4 & 0b1111);
+
+    if mapper_number != 0 {
+      panic!("mapper not supported");
+    }
     let four_screen: bool = rom[6] & 0b1000 != 0;
     let vertical_mirroring = rom[6] & 0b1 != 0;
 

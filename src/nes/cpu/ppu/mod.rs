@@ -412,11 +412,8 @@ impl PPU {
 
         _ => PALETTE_TABLE[bg_palette[color_index as usize] as usize]
       };
-      if x < SCREEN_WIDTH && y < SCREEN_HEIGHT {
-        self.picture.set_pixel(x as usize, y as usize, rgb);
-      } else {
-        println!("x and y overflow: {x},{y}");
-      }
+      self.picture.set_pixel(x as usize, y as usize, rgb);
+
     }
   }
 

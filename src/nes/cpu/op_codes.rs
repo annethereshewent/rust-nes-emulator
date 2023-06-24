@@ -136,13 +136,14 @@ impl CPU {
     // let instr_address = format!("{:X}", self.registers.pc - 1);
     // let instruction_name = instruction.name.to_string();
 
-    // let register_a = format!("{:X}", self.registers.a);
-    // let register_x = format!("{:X}", self.registers.x);
-    // let register_y = format!("{:X}", self.registers.y);
-    // let register_p = format!("{:X}", self.registers.p.bits());
-    // let register_sp = format!("{:X}", self.registers.sp);
+    // let register_a = format!("{:02X}", self.registers.a);
+    // let register_x = format!("{:02X}", self.registers.x);
+    // let register_y = format!("{:02X}", self.registers.y);
+    // let register_p = format!("{:02X}", self.registers.p.bits());
+    // let register_sp = format!("{:02X}", self.registers.sp);
 
-    // println!("{instr_address} {instruction_name} {mode}  A: {register_a} X: {register_x} Y: {register_y} P: {register_p} SP: {register_sp}");
+    //println!("{instr_address}  {instruction_name}           A:{register_a} X:{register_x} Y:{register_y} P:{register_p} SP:{register_sp}");
+    // println!("{instruction_name}");
 
     match instruction.name {
       ADC => self.adc(mode),
@@ -186,7 +187,7 @@ impl CPU {
       LDY => self.ldy(mode),
       LAX => self.lax(mode),
       LSR => self.lsr(mode),
-      NOP => self.nop(),
+      NOP => self.nop(mode),
       ORA => self.ora(mode),
       PHA => self.pha(),
       PHP => self.php(),
@@ -221,8 +222,10 @@ impl CPU {
     self.cycle(instruction.cycles);
   }
 
-  fn nop(&self) {
-    // do nothing
+  fn nop(&mut self, mode: &AddressingMode) {
+    if !matches!(mode, AddressingMode::NoneAddressing) {
+      self.get_operand_address(mode);
+    }
   }
 
   fn ign(&mut self, mode: &AddressingMode) {
