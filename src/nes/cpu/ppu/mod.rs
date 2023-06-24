@@ -358,17 +358,17 @@ impl PPU {
 
     let second_nametable_base = match (nametable_base, &self.mirroring) {
       (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
-      (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) => 0x2000,
-      (0x2000, Mirroring::Horizontal) | (0x2400, Mirroring::Horizontal) => 0x2800,
-      (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
+      (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
+      (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
       _ => todo!("not yet implemented")
     };
 
-    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
+    let chr_rom_bank = if self.ctrl.sprite_size() == 8 { self.ctrl.background_pattern_table_addr() } else { 0 };
 
     let y = self.current_scanline;
 
     let mut scrolled_y = y + self.scroll.y as u16;
+    // let mut scrolled_y = y;
 
     for x in 0..SCREEN_WIDTH {
       let mut scrolled_x = x + self.scroll.x as u16;
@@ -385,6 +385,7 @@ impl PPU {
       let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
 
       let tile_number = self.vram[self.mirror_vram_index(current_nametable + tile_pos) as usize];
+
       let tile_index = chr_rom_bank + (tile_number as u16 * 16);
 
       let x_pos_in_tile = scrolled_x % 8;
