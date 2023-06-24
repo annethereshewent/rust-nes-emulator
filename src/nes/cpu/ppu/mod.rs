@@ -367,20 +367,29 @@ impl PPU {
 
     let y = self.current_scanline;
 
-    let mut scrolled_y = y + self.scroll.y as u16;
     // let mut scrolled_y = y;
 
     for x in 0..SCREEN_WIDTH {
       let mut scrolled_x = x + self.scroll.x as u16;
-      let mut current_nametable = nametable_base;
+      let mut scrolled_y = self.scroll.y as u16 + y;
 
-      if scrolled_x >= SCREEN_WIDTH && matches!(&self.mirroring, Mirroring::Vertical) {
-        scrolled_x %= SCREEN_WIDTH;
-        current_nametable = second_nametable_base;
-      } else if scrolled_y >= SCREEN_HEIGHT && matches!(&self.mirroring, Mirroring::Horizontal) {
-        scrolled_y %= SCREEN_HEIGHT;
-        current_nametable = second_nametable_base;
-      }
+      let current_nametable = if matches!(&self.mirroring, Mirroring::Vertical) {
+        if scrolled_x < SCREEN_WIDTH {
+          nametable_base
+        } else {
+          scrolled_x %= SCREEN_WIDTH;
+          second_nametable_base
+        }
+      } else if matches!(&self.mirroring, Mirroring::Horizontal) {
+        if scrolled_y < SCREEN_HEIGHT {
+          nametable_base
+        } else {
+          scrolled_y %= SCREEN_HEIGHT;
+          second_nametable_base
+        }
+      } else {
+        panic!("four screen not implemented");
+      };
 
       let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
 

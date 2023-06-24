@@ -142,7 +142,7 @@ impl CPU {
     // let register_p = format!("{:02X}", self.registers.p.bits());
     // let register_sp = format!("{:02X}", self.registers.sp);
 
-    //println!("{instr_address}  {instruction_name}           A:{register_a} X:{register_x} Y:{register_y} P:{register_p} SP:{register_sp}");
+    // println!("{instr_address}  {instruction_name}           A:{register_a} X:{register_x} Y:{register_y} P:{register_p} SP:{register_sp}");
     // println!("{instruction_name}");
 
     match instruction.name {
@@ -210,6 +210,8 @@ impl CPU {
       STA => self.store(mode, self.registers.a),
       STX => self.store(mode, self.registers.x),
       STY => self.store(mode, self.registers.y),
+      SXA => self.sxa(mode),
+      SYA => self.sya(mode),
       TAX => self.tax(),
       TAY => self.tay(),
       TSX => self.tsx(),
@@ -226,6 +228,32 @@ impl CPU {
     if !matches!(mode, AddressingMode::NoneAddressing) {
       self.get_operand_address(mode);
     }
+  }
+
+  fn sya(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+
+    let low_byte = (address & 0xff) as u8;
+    let high_byte = (address >> 8) as u8;
+
+    let val = self.registers.y & high_byte.wrapping_add(1);
+
+    let write_address = (val as u16) << 8 | (low_byte as u16);
+
+    self.mem_write(write_address, val);
+  }
+
+  fn sxa(&mut self, mode: &AddressingMode) {
+    let (address, _) = self.get_operand_address(mode);
+
+    let low_byte = (address & 0xff) as u8;
+    let high_byte = (address >> 8) as u8;
+
+    let val = self.registers.x & high_byte.wrapping_add(1);
+
+    let write_address = (val as u16) << 8 | (low_byte as u16);
+
+    self.mem_write(write_address, val);
   }
 
   fn ign(&mut self, mode: &AddressingMode) {
