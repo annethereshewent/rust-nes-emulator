@@ -416,17 +416,14 @@ impl PPU {
       self.background_pixels_drawn.push(color_index != 0);
 
       // finally render the pixel!
-      let rgb = match color_index {
-        0 => PALETTE_TABLE[self.palette_table[0] as usize],
-
-        _ => PALETTE_TABLE[bg_palette[color_index as usize] as usize]
-      };
+      let rgb = PALETTE_TABLE[bg_palette[color_index as usize] as usize];
       self.picture.set_pixel(x as usize, y as usize, rgb);
 
     }
   }
 
   fn get_sprite_palette(&self, palette_index: u8) -> [u8; 4] {
+    // there are 0x11 (or 17) indexes for the background palettes
     let start = 0x11 + (palette_index * 4) as usize;
 
     [
@@ -437,8 +434,11 @@ impl PPU {
     ]
   }
 
-  // see https://bugzmanov.github.io/nes_ebook/chapter_6_4.html on rendering colors and meta-tiles
   fn get_bg_palette(&self, nametable_base: usize, tile_column: usize, tile_row: usize) -> [u8; 4] {
+    // 1 byte in attribute table controls the palette for 4 neighboring meta-tiles, where a meta-tile is 2x2 tiles
+    // thus, 1 byte controls 4x4 tiles or 32x32 pixels total.
+    // so in order to get the index, divide the tile column position by 4, and the tile row position by 4 and multiply by 8
+    // (8 * 32 = 256, the screen width)
     let attribute_table_index = (tile_row / 4) * 8 + (tile_column / 4);
 
     let attr_byte = self.vram[self.mirror_vram_index((nametable_base + 0x3c0 + attribute_table_index) as u16) as usize];
@@ -446,14 +446,19 @@ impl PPU {
     let x_meta_tile_pos = (tile_column % 4) / 2;
     let y_meta_tile_pos = (tile_row % 4) / 2;
 
+    // once you have the x,y coordinates within the 4 neighboring meta tiles, you can determine what two bits to use for the palette
+    // for instance, 0,0 is the top left meta-tile, 1,0 is the top right, and so on.
+    // the first two bits determine the first meta tile, 2nd 2 bits determine the 2nd, 3rd determine the 3rd, last two bits determine 4th tile
     let palette_index = match (x_meta_tile_pos, y_meta_tile_pos) {
       (0,0) => attr_byte & 0b11,
-      (0,1) => (attr_byte >> 4) & 0b11,
       (1,0) => (attr_byte >> 2) & 0b11,
+      (0,1) => (attr_byte >> 4) & 0b11,
       (1,1) => (attr_byte >> 6) & 0b11,
       _ => panic!("should not get here")
     };
 
+    // despite there being 3 colors per palette, after each palette an index is skipped, hence the * 4
+    // ie: palette 0 starts at 0x01 and ends at 0x03, but palette 1 doesn't start until 0x05
     let palette_start: usize = 1 + (palette_index as usize * 4);
 
     [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
