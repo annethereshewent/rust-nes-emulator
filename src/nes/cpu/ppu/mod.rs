@@ -267,6 +267,7 @@ impl PPU {
 
         self.render();
         self.current_scanline = 0;
+        self.nmi_triggered = false;
         self.status.remove(StatusRegister::VBLANK_STARTED);
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
       }
@@ -281,7 +282,6 @@ impl PPU {
   }
 
   // see https://www.nesdev.org/wiki/Mirroring
-  // also https://bugzmanov.github.io/nes_ebook/chapter_6_1.html
   fn mirror_vram_index(&self, address: u16) -> u16 {
     let mirrored_address = address & 0b10111111111111; // mirror down address to range 0x2000 to 0x2eff, where nametables exist
     let vram_index = mirrored_address - 0x2000;
@@ -292,7 +292,7 @@ impl PPU {
       (Mirroring::Horizontal, 2) => vram_index - 0x400, // 2nd kb of memory
       (Mirroring::Horizontal, 3) => vram_index - 0x800, // 2nd kb of memory
       (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
-      _ => vram_index // either it's four screen which has no mirroring or it's screen 0 or another screen that doesn't need the offset
+      _ => vram_index // either it's four screen which has no mirroring or it's nametable 0 or another nametable that doesn't need the offset
     }
   }
 
@@ -570,7 +570,7 @@ impl PPU {
     self.ppu_addr.increment(self.ctrl.vram_address_increment());
 
     match address {
-      0x0000 ..= 0x1fff => panic!("attempt to write to chr rom"),
+      0x0000 ..= 0x1fff => println!("attempting to write to chr rom"),
       0x2000 ..=0x2fff => self.vram[self.mirror_vram_index(address) as usize] = value,
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
