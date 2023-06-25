@@ -143,7 +143,6 @@ impl CPU {
     // let register_sp = format!("{:02X}", self.registers.sp);
 
     // println!("{instr_address}  {instruction_name}           A:{register_a} X:{register_x} Y:{register_y} P:{register_p} SP:{register_sp}");
-    // println!("{instruction_name}");
 
     match instruction.name {
       ADC => self.adc(mode),
