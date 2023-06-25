@@ -567,10 +567,8 @@ impl PPU {
   pub fn write_to_data(&mut self, value: u8) {
     let address = self.ppu_addr.get();
 
-    self.ppu_addr.increment(self.ctrl.vram_address_increment());
-
     match address {
-      0x0000 ..= 0x1fff => println!("attempting to write to chr rom"),
+      0x0000 ..= 0x1fff => println!("attempting to write to chr rom, {:X}", address),
       0x2000 ..=0x2fff => self.vram[self.mirror_vram_index(address) as usize] = value,
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
@@ -579,6 +577,8 @@ impl PPU {
       0x3f00 ..=0x3fff => self.palette_table[(address - 0x3f00) as usize] = value,
       _ => panic!("shouldn't get here")
     }
+
+    self.ppu_addr.increment(self.ctrl.vram_address_increment());
   }
 
   pub fn read_data(&mut self) -> u8 {
