@@ -388,7 +388,7 @@ impl PPU {
           second_nametable_base
         }
       } else {
-        panic!("four screen not implemented");
+        todo!("four screen not implemented");
       };
 
       let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
@@ -510,7 +510,6 @@ impl PPU {
   pub fn write_to_control(&mut self, value: u8) {
     let tmp = self.ctrl.generate_nmi_interrupt();
     self.ctrl = ControlRegister::from_bits_truncate(value);
-
     if !tmp && self.status.contains(StatusRegister::VBLANK_STARTED) && self.ctrl.generate_nmi_interrupt() {
       self.nmi_triggered = true;
     }

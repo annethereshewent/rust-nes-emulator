@@ -109,8 +109,12 @@ impl CPU {
       0x4014 => self.dma_transfer(value),
       0x4016 => self.ppu.joypad.write(value),
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
-      _ => self.memory[address as usize] = value
+      _ => self.ignore_write()
     };
+  }
+
+  fn ignore_write(&self) {
+
   }
 
   pub fn dma_transfer(&mut self, value: u8) {
