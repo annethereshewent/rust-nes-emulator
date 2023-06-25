@@ -3,6 +3,7 @@ pub mod picture;
 pub mod joypad;
 
 use std::collections::HashMap;
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
 
 use registers::control::ControlRegister;
 use registers::mask::MaskRegister;
@@ -15,6 +16,7 @@ use sdl2::render::Canvas;
 use sdl2::video::Window;
 use self::joypad::{ButtonStatus, Joypad};
 use self::registers::address::AddressRegister;
+use std::thread::sleep;
 
 use picture::Picture;
 
@@ -23,11 +25,14 @@ use sdl2::event::Event;
 
 use crate::nes::cartridge::Mirroring;
 
-const SCANLINES_PER_FRAME: u16 = 262;
+pub const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
 
 pub const SCREEN_HEIGHT: u16 = 240;
 pub const SCREEN_WIDTH: u16 = 256;
+
+const MAX_FPS: u32 = 60;
+const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
@@ -124,7 +129,8 @@ pub struct PPU {
   pub joypad: Joypad,
   joypad_map: HashMap<u8, ButtonStatus>,
   key_map: HashMap<Keycode, ButtonStatus>,
-  background_pixels_drawn: Vec<bool>
+  background_pixels_drawn: Vec<bool>,
+  previous_time: u128
 }
 
 impl PPU {
@@ -214,7 +220,8 @@ impl PPU {
       joypad_map,
       key_map,
       joypad: Joypad::new(),
-      background_pixels_drawn: Vec::new()
+      background_pixels_drawn: Vec::new(),
+      previous_time: 0
     }
   }
 
@@ -243,6 +250,22 @@ impl PPU {
       }
 
       if self.current_scanline >= SCANLINES_PER_FRAME {
+        let current_time = SystemTime::now()
+          .duration_since(UNIX_EPOCH)
+          .expect("an error occurred")
+          .as_millis();
+        if self.previous_time != 0 {
+          let diff = current_time - self.previous_time;
+          self.previous_time = current_time;
+
+          if diff < FPS_INTERVAL as u128 {
+            // sleep for the missing time
+            sleep(Duration::from_millis((FPS_INTERVAL - diff as u32) as u64));
+          }
+        } else {
+          self.previous_time = current_time;
+        }
+
         self.render();
         self.current_scanline = 0;
         self.status.remove(StatusRegister::VBLANK_STARTED);
