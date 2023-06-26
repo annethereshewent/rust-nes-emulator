@@ -1,3 +1,4 @@
 /target
 *.nes
 .vscode
+*.log
