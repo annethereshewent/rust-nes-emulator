@@ -345,13 +345,13 @@ impl PPU {
         let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16 + 8) as usize];
 
         for x in 0..8 {
-          let x_shift = if x_flip {
+          let bit_pos = if x_flip {
             x
           } else {
             7 - x
           };
 
-          let color_index = ((lower_byte >> x_shift) & 0b1) + (((upper_byte >> x_shift) & 0b1) << 1);
+          let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
 
           let rgb = match color_index {
             0 => continue,
@@ -366,7 +366,7 @@ impl PPU {
 
           let is_pixel_visible = !(sprite_behind_background && self.background_pixels_drawn[x_pos]);
 
-          if is_pixel_visible {
+          if is_pixel_visible && x_pos > 0 {
             self.picture.set_pixel(x_pos, y as usize, rgb);
           }
         }
