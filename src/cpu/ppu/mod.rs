@@ -182,8 +182,6 @@ impl PPU {
       }
 
       if self.current_scanline >= SCANLINES_PER_FRAME {
-        self.cap_fps();
-
         // self.render();
         self.current_scanline = 0;
         self.nmi_triggered = false;

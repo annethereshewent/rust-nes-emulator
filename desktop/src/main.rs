@@ -97,8 +97,10 @@ fn main() {
   loop {
     let mut cycles: usize = 0;
     while cycles < CYCLES_PER_FRAME {
-      cycles += cpu.tick() as usize;
+      cycles += (cpu.tick() * 3) as usize;
     }
+
+    cpu.ppu.cap_fps();
 
     // render the frame!
     texture.update(None, &cpu.ppu.picture.data, 256 * 3).unwrap();

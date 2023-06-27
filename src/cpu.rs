@@ -8,7 +8,8 @@ pub struct CPU {
   pub registers: Registers,
   pub memory: [u8; 0x10000],
   pub ppu: PPU,
-  pub prg_length: usize
+  pub prg_length: usize,
+  cycles: u16
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -51,7 +52,8 @@ impl CPU {
       },
       memory: [0; 0x10000],
       prg_length: 0,
-      ppu: PPU::new(Vec::new(), Mirroring::Vertical)
+      ppu: PPU::new(Vec::new(), Mirroring::Vertical),
+      cycles: 0
     }
   }
 
@@ -148,6 +150,7 @@ impl CPU {
   }
 
   pub fn tick(&mut self) -> u16 {
+    self.cycles = 0;
     if self.ppu.nmi_triggered {
       self.trigger_interrupt(NMI_INTERRUPT_VECTOR_ADDRESS);
       self.ppu.nmi_triggered = false;
@@ -157,7 +160,9 @@ impl CPU {
 
     self.registers.pc += 1;
 
-    self.decode(op_code)
+    self.decode(op_code);
+
+    self.cycles
   }
 
   fn trigger_interrupt(&mut self, interrupt_vector_address: u16) {
@@ -205,6 +210,7 @@ impl CPU {
   }
 
   pub fn cycle(&mut self, cycles: u16) {
+    self.cycles += cycles;
     self.ppu.tick(cycles * 3);
   }
 }
