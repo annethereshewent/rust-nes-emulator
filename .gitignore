@@ -2,3 +2,4 @@
 *.nes
 .vscode
 *.log
+wasm_emulator/target

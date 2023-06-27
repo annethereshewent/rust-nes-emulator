@@ -1,3 +1,5 @@
+#![crate_name = "nes_emulator"]
+
 pub mod nes;
 
 use std::env;
