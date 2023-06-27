@@ -241,7 +241,6 @@ impl PPU {
       self.current_scanline += 1;
 
       if self.current_scanline == SCREEN_HEIGHT+1 {
-        // trigger NMI interrupt
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
         self.status.insert(StatusRegister::VBLANK_STARTED);
         if self.ctrl.generate_nmi_interrupt() {
@@ -275,7 +274,10 @@ impl PPU {
       }
     }
 
-    self.previous_time = current_time;
+    self.previous_time = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("an error occurred")
+      .as_millis();
   }
   fn sprite_zero_hit(&self, cycles: u16) -> bool {
     let y = self.oam_data[0];
