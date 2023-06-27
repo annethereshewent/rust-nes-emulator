@@ -36,74 +36,90 @@ const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
-const PALETTE_TABLE: [(u8,u8,u8); 64] = [
-  (84, 84, 84),
-  (0, 30, 116 ),
-  (8, 16, 144),
-  (48, 0, 136),
-  (68, 0, 100),
-  (92, 0, 48),
-  (84, 4, 0),
-  (60, 24, 0),
-  (32, 42, 0),
-  (8, 58, 0),
-  (0, 64, 0),
-  (0, 60, 0),
-  (0, 50, 60),
-  (0, 0, 0),
-  (0, 0, 0),
-  (0, 0, 0),
+// const PALETTE_TABLE: [(u8,u8,u8); 64] = [
+//   (84, 84, 84),
+//   (0, 30, 116 ),
+//   (8, 16, 144),
+//   (48, 0, 136),
+//   (68, 0, 100),
+//   (92, 0, 48),
+//   (84, 4, 0),
+//   (60, 24, 0),
+//   (32, 42, 0),
+//   (8, 58, 0),
+//   (0, 64, 0),
+//   (0, 60, 0),
+//   (0, 50, 60),
+//   (0, 0, 0),
+//   (0, 0, 0),
+//   (0, 0, 0),
 
-  (152, 150, 152),
-  (8, 76, 196 ),
-  (48, 50, 236),
-  (92, 30, 228),
-  (136, 20, 176),
-  (160, 20, 100),
-  (152, 34, 32),
-  (120, 60, 0),
-  (84, 90, 0),
-  (40, 114, 0),
-  (8, 124, 0),
-  (0, 118, 40),
-  (0, 102, 120),
-  (0, 0, 0),
-  (0, 0, 0),
-  (0, 0, 0),
+//   (152, 150, 152),
+//   (8, 76, 196 ),
+//   (48, 50, 236),
+//   (92, 30, 228),
+//   (136, 20, 176),
+//   (160, 20, 100),
+//   (152, 34, 32),
+//   (120, 60, 0),
+//   (84, 90, 0),
+//   (40, 114, 0),
+//   (8, 124, 0),
+//   (0, 118, 40),
+//   (0, 102, 120),
+//   (0, 0, 0),
+//   (0, 0, 0),
+//   (0, 0, 0),
 
-  (236, 238, 236),
-  (76, 154, 236 ),
-  (120, 124, 236),
-  (176, 98, 236),
-  (228, 84, 236),
-  (236, 88, 180),
-  (236, 106, 100),
-  (212, 136, 32),
-  (160, 170, 0),
-  (116, 196, 0),
-  (76, 208, 32),
-  (56, 204, 108),
-  (56, 180, 204),
-  (60, 60, 60),
-  (0, 0, 0),
-  (0, 0, 0),
+//   (236, 238, 236),
+//   (76, 154, 236 ),
+//   (120, 124, 236),
+//   (176, 98, 236),
+//   (228, 84, 236),
+//   (236, 88, 180),
+//   (236, 106, 100),
+//   (212, 136, 32),
+//   (160, 170, 0),
+//   (116, 196, 0),
+//   (76, 208, 32),
+//   (56, 204, 108),
+//   (56, 180, 204),
+//   (60, 60, 60),
+//   (0, 0, 0),
+//   (0, 0, 0),
 
-  (236, 238, 236),
-  (168, 204, 236),
-  (188, 188, 236),
-  (212, 178, 236),
-  (236, 174, 236),
-  (236, 174, 212),
-  (236, 180, 176),
-  (228, 196, 144),
-  (204, 210, 120),
-  (180, 222, 120),
-  (168, 226, 144),
-  (152, 226, 180),
-  (160, 214, 228),
-  (160, 162, 160),
-  (0, 0, 0),
-  (0, 0, 0),
+//   (236, 238, 236),
+//   (168, 204, 236),
+//   (188, 188, 236),
+//   (212, 178, 236),
+//   (236, 174, 236),
+//   (236, 174, 212),
+//   (236, 180, 176),
+//   (228, 196, 144),
+//   (204, 210, 120),
+//   (180, 222, 120),
+//   (168, 226, 144),
+//   (152, 226, 180),
+//   (160, 214, 228),
+//   (160, 162, 160),
+//   (0, 0, 0),
+//   (0, 0, 0),
+// ];
+
+const PALETTE_TABLE: [(u8, u8, u8); 64] = [
+  (0x80, 0x80, 0x80), (0x00, 0x3D, 0xA6), (0x00, 0x12, 0xB0), (0x44, 0x00, 0x96), (0xA1, 0x00, 0x5E),
+  (0xC7, 0x00, 0x28), (0xBA, 0x06, 0x00), (0x8C, 0x17, 0x00), (0x5C, 0x2F, 0x00), (0x10, 0x45, 0x00),
+  (0x05, 0x4A, 0x00), (0x00, 0x47, 0x2E), (0x00, 0x41, 0x66), (0x00, 0x00, 0x00), (0x05, 0x05, 0x05),
+  (0x05, 0x05, 0x05), (0xC7, 0xC7, 0xC7), (0x00, 0x77, 0xFF), (0x21, 0x55, 0xFF), (0x82, 0x37, 0xFA),
+  (0xEB, 0x2F, 0xB5), (0xFF, 0x29, 0x50), (0xFF, 0x22, 0x00), (0xD6, 0x32, 0x00), (0xC4, 0x62, 0x00),
+  (0x35, 0x80, 0x00), (0x05, 0x8F, 0x00), (0x00, 0x8A, 0x55), (0x00, 0x99, 0xCC), (0x21, 0x21, 0x21),
+  (0x09, 0x09, 0x09), (0x09, 0x09, 0x09), (0xFF, 0xFF, 0xFF), (0x0F, 0xD7, 0xFF), (0x69, 0xA2, 0xFF),
+  (0xD4, 0x80, 0xFF), (0xFF, 0x45, 0xF3), (0xFF, 0x61, 0x8B), (0xFF, 0x88, 0x33), (0xFF, 0x9C, 0x12),
+  (0xFA, 0xBC, 0x20), (0x9F, 0xE3, 0x0E), (0x2B, 0xF0, 0x35), (0x0C, 0xF0, 0xA4), (0x05, 0xFB, 0xFF),
+  (0x5E, 0x5E, 0x5E), (0x0D, 0x0D, 0x0D), (0x0D, 0x0D, 0x0D), (0xFF, 0xFF, 0xFF), (0xA6, 0xFC, 0xFF),
+  (0xB3, 0xEC, 0xFF), (0xDA, 0xAB, 0xEB), (0xFF, 0xA8, 0xF9), (0xFF, 0xAB, 0xB3), (0xFF, 0xD2, 0xB0),
+  (0xFF, 0xEF, 0xA6), (0xFF, 0xF7, 0x9C), (0xD7, 0xE8, 0x95), (0xA6, 0xED, 0xAF), (0xA2, 0xF2, 0xDA),
+  (0x99, 0xFF, 0xFC), (0xDD, 0xDD, 0xDD), (0x11, 0x11, 0x11), (0x11, 0x11, 0x11)
 ];
 
 pub struct PPU {
@@ -229,14 +245,10 @@ impl PPU {
     self.cycles += cycles;
 
     if self.cycles >= CYCLES_PER_SCANLINE {
-      if self.sprite_zero_hit(self.cycles) {
-        self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
-      }
-
-      self.cycles -= CYCLES_PER_SCANLINE;
       if self.current_scanline < SCREEN_HEIGHT {
         self.draw_line();
       }
+      self.cycles -= CYCLES_PER_SCANLINE;
 
       self.current_scanline += 1;
 
@@ -279,12 +291,12 @@ impl PPU {
       .expect("an error occurred")
       .as_millis();
   }
-  fn sprite_zero_hit(&self, cycles: u16) -> bool {
-    let y = self.oam_data[0];
-    let x = self.oam_data[3];
+  // fn sprite_zero_hit(&self, cycles: u16) -> bool {
+  //   let y = self.oam_data[0];
+  //   let x = self.oam_data[3];
 
-    y as u16 == self.current_scanline && x as u16 <= cycles && self.mask.contains(MaskRegister::SHOW_SPRITES)
-  }
+  //   y as u16 == self.current_scanline && x as u16 <= cycles && self.mask.contains(MaskRegister::SHOW_SPRITES)
+  // }
 
   // see https://www.nesdev.org/wiki/Mirroring
   fn mirror_vram_index(&self, address: u16) -> u16 {
@@ -315,6 +327,13 @@ impl PPU {
     self.background_pixels_drawn = Vec::new();
     self.draw_background();
     self.draw_sprites();
+  }
+
+  fn sprite_zero_hit(&self, i: usize, x: usize) -> bool {
+    i == 0 &&
+    x != 255 &&
+    self.mask.contains(MaskRegister::SHOW_SPRITES) &&
+    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT)
   }
 
   fn draw_sprites(&mut self) {
@@ -365,13 +384,17 @@ impl PPU {
 
           let x_pos = (tile_x as usize + x) as usize;
 
-          if x_pos >= SCREEN_WIDTH as usize {
+          if x_pos >= SCREEN_WIDTH as usize || x_pos < 0 as usize {
             continue;
+          }
+
+          if self.sprite_zero_hit(i, x_pos) {
+            self.status.set(StatusRegister::SPRITE_ZERO_HIT, true);
           }
 
           let is_pixel_visible = !(sprite_behind_background && self.background_pixels_drawn[x_pos]);
 
-          if is_pixel_visible && x_pos > 0 {
+          if is_pixel_visible {
             self.picture.set_pixel(x_pos, y as usize, rgb);
           }
         }
