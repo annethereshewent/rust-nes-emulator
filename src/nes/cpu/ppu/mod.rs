@@ -240,7 +240,7 @@ impl PPU {
 
       self.current_scanline += 1;
 
-      if self.current_scanline > SCREEN_HEIGHT {
+      if self.current_scanline == SCREEN_HEIGHT+1 {
         // trigger NMI interrupt
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
         self.status.insert(StatusRegister::VBLANK_STARTED);

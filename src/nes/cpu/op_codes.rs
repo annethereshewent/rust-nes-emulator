@@ -225,7 +225,11 @@ impl CPU {
 
   fn nop(&mut self, mode: &AddressingMode) {
     if !matches!(mode, AddressingMode::NoneAddressing) {
-      self.get_operand_address(mode);
+      let (_, page_cross) = self.get_operand_address(mode);
+
+      if page_cross {
+        self.cycle(1);
+      }
     }
   }
 
