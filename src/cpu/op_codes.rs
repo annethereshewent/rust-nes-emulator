@@ -1,7 +1,7 @@
 pub mod instruction;
 
-use crate::nes::CPU;
-use crate::nes::cpu::CpuFlags;
+use crate::cpu::CPU;
+use crate::cpu::CpuFlags;
 
 use instruction::AddressingMode;
 

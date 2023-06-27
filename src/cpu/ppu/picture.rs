@@ -1,5 +1,4 @@
 use super::SCREEN_WIDTH;
-
 pub struct Picture {
   pub data: Vec<u8>
 }

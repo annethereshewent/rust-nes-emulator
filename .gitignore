@@ -3,3 +3,4 @@
 .vscode
 *.log
 wasm_emulator/target
+desktop/target

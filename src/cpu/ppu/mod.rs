@@ -2,28 +2,19 @@ pub mod registers;
 pub mod picture;
 pub mod joypad;
 
-use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH, Duration};
+use std::thread::sleep;
+use std::time::{Duration, UNIX_EPOCH, SystemTime};
 
 use registers::control::ControlRegister;
 use registers::mask::MaskRegister;
 use registers::scroll::ScrollRegister;
 use registers::status::StatusRegister;
-use sdl2::EventPump;
-use sdl2::controller::GameController;
-use sdl2::keyboard::Keycode;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
 use self::joypad::{ButtonStatus, Joypad};
 use self::registers::address::AddressRegister;
-use std::thread::sleep;
 
 use picture::Picture;
 
-use sdl2::pixels::PixelFormatEnum;
-use sdl2::event::Event;
-
-use crate::nes::cartridge::Mirroring;
+use crate::cartridge::Mirroring;
 
 pub const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
@@ -34,7 +25,7 @@ pub const SCREEN_HEIGHT: u16 = 240;
 pub const SCREEN_WIDTH: u16 = 256;
 
 const MAX_FPS: u32 = 60;
-const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
+pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
@@ -140,81 +131,14 @@ pub struct PPU {
   cycles: u16,
   current_scanline: u16,
   pub nmi_triggered: bool,
-  canvas: Canvas<Window>,
   pub picture: Picture,
-  event_pump: EventPump,
-  _controller: Option<GameController>,
   pub joypad: Joypad,
-  joypad_map: HashMap<u8, ButtonStatus>,
-  key_map: HashMap<Keycode, ButtonStatus>,
   background_pixels_drawn: Vec<bool>,
-  previous_time: u128
+  previous_time: u128,
 }
 
 impl PPU {
   pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-
-    let game_controller_subsystem = sdl_context.game_controller().unwrap();
-
-    let available = game_controller_subsystem
-        .num_joysticks()
-        .map_err(|e| format!("can't enumerate joysticks: {}", e)).unwrap();
-
-    let controller = (0..available)
-      .find_map(|id| {
-        match game_controller_subsystem.open(id) {
-          Ok(c) => {
-            Some(c)
-          }
-          Err(_) => {
-            None
-          }
-        }
-      });
-
-    let mut key_map = HashMap::new();
-
-    key_map.insert(Keycode::W, ButtonStatus::UP);
-    key_map.insert(Keycode::A, ButtonStatus::LEFT);
-    key_map.insert(Keycode::S, ButtonStatus::DOWN);
-    key_map.insert(Keycode::D, ButtonStatus::RIGHT);
-
-    key_map.insert(Keycode::Space, ButtonStatus::BUTTON_A);
-    key_map.insert(Keycode::K, ButtonStatus::BUTTON_A);
-
-    key_map.insert(Keycode::LShift, ButtonStatus::BUTTON_B);
-    key_map.insert(Keycode::J, ButtonStatus::BUTTON_B);
-
-    key_map.insert(Keycode::Tab, ButtonStatus::SELECT);
-    key_map.insert(Keycode::Return, ButtonStatus::START);
-
-
-    let mut joypad_map = HashMap::new();
-
-    joypad_map.insert(0, ButtonStatus::BUTTON_A);
-    joypad_map.insert(2, ButtonStatus::BUTTON_B);
-
-    joypad_map.insert(6, ButtonStatus::START);
-    joypad_map.insert(4, ButtonStatus::SELECT);
-
-    joypad_map.insert(11, ButtonStatus::UP);
-    joypad_map.insert(12, ButtonStatus::DOWN);
-    joypad_map.insert(13, ButtonStatus::LEFT);
-    joypad_map.insert(14, ButtonStatus::RIGHT);
-
-    let window = video_subsystem
-      .window("NES Emulator", (SCREEN_WIDTH * 3) as u32, (SCREEN_HEIGHT * 3) as u32)
-      .position_centered()
-      .build()
-      .unwrap();
-
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-    canvas.set_scale(3.0, 3.0).unwrap();
-
-    let event_pump = sdl_context.event_pump().unwrap();
-
     PPU {
       ctrl: ControlRegister::from_bits_truncate(0b00000000),
       mask: MaskRegister::from_bits_truncate(0b00000000),
@@ -231,12 +155,7 @@ impl PPU {
       cycles: 0,
       current_scanline: 0,
       nmi_triggered: false,
-      canvas,
       picture: Picture::new(),
-      event_pump,
-      _controller: controller,
-      joypad_map,
-      key_map,
       joypad: Joypad::new(),
       background_pixels_drawn: Vec::new(),
       previous_time: 0
@@ -265,7 +184,7 @@ impl PPU {
       if self.current_scanline >= SCANLINES_PER_FRAME {
         self.cap_fps();
 
-        self.render();
+        // self.render();
         self.current_scanline = 0;
         self.nmi_triggered = false;
         self.status.remove(StatusRegister::VBLANK_STARTED);
@@ -274,7 +193,7 @@ impl PPU {
     }
   }
 
-  fn cap_fps(&mut self) {
+  pub fn cap_fps(&mut self) {
     let current_time = SystemTime::now()
       .duration_since(UNIX_EPOCH)
       .expect("an error occurred")
@@ -510,49 +429,49 @@ impl PPU {
     [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
   }
 
-  fn render(&mut self) {
-    let creator = self.canvas.texture_creator();
-    let mut texture = creator
-        .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
-        .unwrap();
+  // fn render(&mut self) {
+  //   let creator = self.canvas.texture_creator();
+  //   let mut texture = creator
+  //       .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
+  //       .unwrap();
 
-    texture.update(None, &self.picture.data, 256 * 3).unwrap();
+  //   texture.update(None, &self.picture.data, 256 * 3).unwrap();
 
-    self.canvas.copy(&texture, None, None).unwrap();
+  //   self.canvas.copy(&texture, None, None).unwrap();
 
-    self.canvas.present();
+  //   self.canvas.present();
 
-    for event in self.event_pump.poll_iter() {
-      match event {
-        Event::Quit { .. }
-        | Event::KeyDown {
-            keycode: Some(Keycode::Escape),
-            ..
-        } => std::process::exit(0),
-        Event::KeyDown { keycode, .. }=> {
-          if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
-            self.joypad.set_button(*button, true);
-          }
-        }
-        Event::KeyUp { keycode, .. } => {
-          if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
-            self.joypad.set_button(*button, false);
-          }
-        }
-        Event::JoyButtonDown { button_idx, .. } => {
-          if let Some(button) = self.joypad_map.get(&button_idx){
-            self.joypad.set_button(*button, true);
-          }
-        }
-        Event::JoyButtonUp { button_idx, .. } => {
-          if let Some(button) = self.joypad_map.get(&button_idx){
-            self.joypad.set_button(*button, false);
-          }
-        }
-        _ => { /* do nothing */ }
-      }
-    }
-  }
+  //   for event in self.event_pump.poll_iter() {
+  //     match event {
+  //       Event::Quit { .. }
+  //       | Event::KeyDown {
+  //           keycode: Some(Keycode::Escape),
+  //           ..
+  //       } => std::process::exit(0),
+  //       Event::KeyDown { keycode, .. }=> {
+  //         if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
+  //           self.joypad.set_button(*button, true);
+  //         }
+  //       }
+  //       Event::KeyUp { keycode, .. } => {
+  //         if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
+  //           self.joypad.set_button(*button, false);
+  //         }
+  //       }
+  //       Event::JoyButtonDown { button_idx, .. } => {
+  //         if let Some(button) = self.joypad_map.get(&button_idx){
+  //           self.joypad.set_button(*button, true);
+  //         }
+  //       }
+  //       Event::JoyButtonUp { button_idx, .. } => {
+  //         if let Some(button) = self.joypad_map.get(&button_idx){
+  //           self.joypad.set_button(*button, false);
+  //         }
+  //       }
+  //       _ => { /* do nothing */ }
+  //     }
+  //   }
+  // }
 
   pub fn read_oam_data(&self) -> u8 {
     self.oam_data[self.oam_address as usize]
