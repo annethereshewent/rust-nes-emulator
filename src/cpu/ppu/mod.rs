@@ -9,7 +9,7 @@ use registers::control::ControlRegister;
 use registers::mask::MaskRegister;
 use registers::scroll::ScrollRegister;
 use registers::status::StatusRegister;
-use self::joypad::{ButtonStatus, Joypad};
+use self::joypad::Joypad;
 use self::registers::address::AddressRegister;
 
 use picture::Picture;
