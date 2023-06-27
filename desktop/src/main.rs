@@ -1,20 +1,13 @@
 extern crate nes_emulator;
 
 use std::collections::HashMap;
-use std::thread::sleep;
-use std::time::{UNIX_EPOCH, SystemTime, Duration};
 
 use nes_emulator::cartridge::Cartridge;
 use nes_emulator::cpu::CPU;
 
 use nes_emulator::cpu::ppu::joypad::ButtonStatus;
-use nes_emulator::cpu::ppu::{CYCLES_PER_FRAME, SCREEN_HEIGHT, SCREEN_WIDTH, FPS_INTERVAL};
-use sdl2::EventPump;
-use sdl2::controller::GameController;
+use nes_emulator::cpu::ppu::{CYCLES_PER_FRAME, SCREEN_HEIGHT, SCREEN_WIDTH};
 use sdl2::keyboard::Keycode;
-use sdl2::render::Canvas;
-use sdl2::video::Window;
-
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::event::Event;
 
@@ -43,7 +36,7 @@ fn main() {
       .num_joysticks()
       .map_err(|e| format!("can't enumerate joysticks: {}", e)).unwrap();
 
-  let controller = (0..available)
+  let _controller = (0..available)
     .find_map(|id| {
       match game_controller_subsystem.open(id) {
         Ok(c) => {
@@ -100,8 +93,6 @@ fn main() {
   let mut texture = creator
       .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
       .unwrap();
-
-  let mut previous_time = 0;
 
   loop {
     let mut cycles: usize = 0;
