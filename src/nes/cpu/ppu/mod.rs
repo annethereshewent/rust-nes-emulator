@@ -291,12 +291,6 @@ impl PPU {
       .expect("an error occurred")
       .as_millis();
   }
-  // fn sprite_zero_hit(&self, cycles: u16) -> bool {
-  //   let y = self.oam_data[0];
-  //   let x = self.oam_data[3];
-
-  //   y as u16 == self.current_scanline && x as u16 <= cycles && self.mask.contains(MaskRegister::SHOW_SPRITES)
-  // }
 
   // see https://www.nesdev.org/wiki/Mirroring
   fn mirror_vram_index(&self, address: u16) -> u16 {
