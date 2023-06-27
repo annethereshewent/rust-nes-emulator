@@ -250,20 +250,7 @@ impl PPU {
       }
 
       if self.current_scanline >= SCANLINES_PER_FRAME {
-        let current_time = SystemTime::now()
-          .duration_since(UNIX_EPOCH)
-          .expect("an error occurred")
-          .as_millis();
-
-        if self.previous_time != 0 {
-          let diff = current_time - self.previous_time;
-          if diff < FPS_INTERVAL as u128 {
-            // sleep for the missing time
-            sleep(Duration::from_millis((FPS_INTERVAL - diff as u32) as u64));
-          }
-        }
-
-        self.previous_time = current_time;
+        self.cap_fps();
 
         self.render();
         self.current_scanline = 0;
@@ -274,6 +261,22 @@ impl PPU {
     }
   }
 
+  fn cap_fps(&mut self) {
+    let current_time = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("an error occurred")
+      .as_millis();
+
+    if self.previous_time != 0 {
+      let diff = current_time - self.previous_time;
+      if diff < FPS_INTERVAL as u128 {
+        // sleep for the missing time
+        sleep(Duration::from_millis((FPS_INTERVAL - diff as u32) as u64));
+      }
+    }
+
+    self.previous_time = current_time;
+  }
   fn sprite_zero_hit(&self, cycles: u16) -> bool {
     let y = self.oam_data[0];
     let x = self.oam_data[3];
