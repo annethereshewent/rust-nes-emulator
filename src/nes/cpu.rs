@@ -1,7 +1,7 @@
 pub mod op_codes;
 pub mod ppu;
 
-use super::cartridge::Cartridge;
+use super::cartridge::{Cartridge, Mirroring};
 use ppu::PPU;
 
 pub struct CPU {
@@ -39,8 +39,8 @@ bitflags! {
 }
 
 impl CPU {
-  pub fn new(cartridge: Cartridge) -> Self {
-    let mut cpu = CPU {
+  pub fn new() -> Self {
+    CPU {
       registers: Registers {
         a: 0,
         pc: 0,
@@ -50,13 +50,9 @@ impl CPU {
         sp: STACK_START
       },
       memory: [0; 0x10000],
-      prg_length: cartridge.prg_rom.len(),
-      ppu: PPU::new(cartridge.chr_rom, cartridge.mirroring)
-    };
-
-    cpu.load_game(cartridge.prg_rom);
-
-    cpu
+      prg_length: 0,
+      ppu: PPU::new(Vec::new(), Mirroring::Vertical)
+    }
   }
 
   pub fn mem_read(&mut self, address: u16) -> u8 {
@@ -141,13 +137,17 @@ impl CPU {
     (high_byte << 8) | low_byte
   }
 
-  pub fn load_game(&mut self, rom: Vec<u8>) {
-    self.memory[0x8000 .. (0x8000 + rom.len())].copy_from_slice(&rom[..]);
+  pub fn load_game(&mut self, cartridge: Cartridge) {
+    self.memory[0x8000 .. (0x8000 + cartridge.prg_rom.len())].copy_from_slice(&cartridge.prg_rom[..]);
+    self.prg_length = cartridge.prg_rom.len();
+    self.ppu.chr_rom = cartridge.chr_rom;
+    self.ppu.mirroring = cartridge.mirroring;
+
     self.registers.pc = self.mem_read_u16(0xfffc);
     // self.registers.pc = 0xc000;
   }
 
-  pub fn tick(&mut self) {
+  pub fn tick(&mut self) -> u16 {
     if self.ppu.nmi_triggered {
       self.trigger_interrupt(NMI_INTERRUPT_VECTOR_ADDRESS);
       self.ppu.nmi_triggered = false;
@@ -157,7 +157,7 @@ impl CPU {
 
     self.registers.pc += 1;
 
-    self.decode(op_code);
+    self.decode(op_code)
   }
 
   fn trigger_interrupt(&mut self, interrupt_vector_address: u16) {

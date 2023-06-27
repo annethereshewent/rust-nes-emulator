@@ -28,6 +28,8 @@ use crate::nes::cartridge::Mirroring;
 pub const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
 
+pub const CYCLES_PER_FRAME: usize = CYCLES_PER_SCANLINE as usize * SCANLINES_PER_FRAME as usize;
+
 pub const SCREEN_HEIGHT: u16 = 240;
 pub const SCREEN_WIDTH: u16 = 256;
 
@@ -139,7 +141,7 @@ pub struct PPU {
   current_scanline: u16,
   pub nmi_triggered: bool,
   canvas: Canvas<Window>,
-  picture: Picture,
+  pub picture: Picture,
   event_pump: EventPump,
   _controller: Option<GameController>,
   pub joypad: Joypad,

@@ -128,7 +128,7 @@ lazy_static! {
 
 impl CPU {
 
-  pub fn decode(&mut self, op_code: u8) {
+  pub fn decode(&mut self, op_code: u8) -> u16 {
     let instruction = &INSTRUCTIONS[op_code as usize];
 
     let mode = &instruction.mode;
@@ -221,6 +221,8 @@ impl CPU {
     }
 
     self.cycle(instruction.cycles);
+
+    instruction.cycles
   }
 
   fn nop(&mut self, mode: &AddressingMode) {
