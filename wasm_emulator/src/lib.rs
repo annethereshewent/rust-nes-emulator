@@ -2,9 +2,9 @@ use wasm_bindgen::prelude::*;
 
 extern crate nes_emulator;
 
-use nes_emulator::nes::cpu::CPU;
-use nes_emulator::nes::cpu::ppu::CYCLES_PER_FRAME;
-use nes_emulator::nes::cartridge::Cartridge;
+use nes_emulator::cpu::CPU;
+use nes_emulator::cpu::ppu::CYCLES_PER_FRAME;
+use nes_emulator::cartridge::Cartridge;
 
 #[wasm_bindgen]
 pub struct WasmEmulator {
