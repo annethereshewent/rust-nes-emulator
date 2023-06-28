@@ -10,7 +10,7 @@
   <canvas width="256" height="240" id="canvas" />
   <script src="jszip.min.js"></script>
   <script type="module">
-    import init, { WasmEmulator } from "./pkg/nes_emulator_wasm.js"
+    import init, { WasmEmulator, ButtonEvent } from "./pkg/nes_emulator_wasm.js"
 
     const SCREEN_WIDTH = 256
     const SCREEN_HEIGHT = 240
@@ -25,10 +25,19 @@
 
       const rustMemory = new Uint8Array(wasm.memory.buffer, emulator.get_picture_pointer())
 
+
       const romInput = document.getElementById("rom-input")
 
       romInput.addEventListener("change", (e) => {
         handleFileChange(e)
+      })
+
+      document.addEventListener("keyup", (e) => {
+
+      })
+
+      document.addEventListener("keydown", (e) => {
+
       })
 
       async function handleFileChange(e) {
@@ -49,7 +58,6 @@
 
           if (rom != null) {
             emulator.load(new Uint8Array(rom));
-
             requestAnimationFrame((time) => run(time))
           }
         }
@@ -78,16 +86,41 @@
         return imageData
       }
 
+      const A_BUTTON = 0
+      const B_BUTTON = 1
+      const SELECT = 8
+      const START = 9
+      const UP = 12
+      const DOWN = 13
+      const LEFT = 14
+      const RIGHT = 15
 
-      async function run(time) {
+      function handleJoypadInput() {
+        const gamepad = navigator.getGamepads()[0]
+
+        if (gamepad != null) {
+          emulator.update_input(ButtonEvent.ButtonA, gamepad.buttons[A_BUTTON].pressed == true)
+          emulator.update_input(ButtonEvent.ButtonB, gamepad.buttons[B_BUTTON].pressed == true)
+          emulator.update_input(ButtonEvent.Select, gamepad.buttons[SELECT].pressed == true)
+          emulator.update_input(ButtonEvent.Start, gamepad.buttons[START].pressed == true)
+          emulator.update_input(ButtonEvent.Up, gamepad.buttons[UP].pressed == true)
+          emulator.update_input(ButtonEvent.Down, gamepad.buttons[DOWN].pressed == true)
+          emulator.update_input(ButtonEvent.Left, gamepad.buttons[LEFT].pressed == true)
+          emulator.update_input(ButtonEvent.Right, gamepad.buttons[RIGHT].pressed == true)
+        }
+      }
+
+
+      function run(time) {
         const diff = time - previousTime
 
         if (diff >= FPS_INTERVAL || previousTime == 0) {
           previousTime = time - (diff % FPS_INTERVAL)
           emulator.step_frame()
-          const currentTime = new Date().getTime()
 
+          const currentTime = new Date().getTime()
           context.putImageData(getImageData(), 0, 0)
+          handleJoypadInput()
         }
 
         requestAnimationFrame((time) => run(time))
