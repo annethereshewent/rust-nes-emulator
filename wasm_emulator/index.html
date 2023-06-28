@@ -175,16 +175,15 @@
       function handleJoypadInput() {
         const gamepad = navigator.getGamepads()[0]
 
-        if (gamepad != null) {
-          emulator.update_input(ButtonEvent.ButtonA, gamepad.buttons[A_BUTTON].pressed == true || isPressingK || isPressingSpace)
-          emulator.update_input(ButtonEvent.ButtonB, gamepad.buttons[B_BUTTON].pressed == true || isPressingJ || isPressingShift)
-          emulator.update_input(ButtonEvent.Select, gamepad.buttons[SELECT].pressed == true || isPressingTab)
-          emulator.update_input(ButtonEvent.Start, gamepad.buttons[START].pressed == true || isPressingEnter)
-          emulator.update_input(ButtonEvent.Up, gamepad.buttons[UP].pressed == true || isPressingW)
-          emulator.update_input(ButtonEvent.Down, gamepad.buttons[DOWN].pressed == true || isPressingS)
-          emulator.update_input(ButtonEvent.Left, gamepad.buttons[LEFT].pressed == true || isPressingA)
-          emulator.update_input(ButtonEvent.Right, gamepad.buttons[RIGHT].pressed == true || isPressingD)
-        }
+        emulator.update_input(ButtonEvent.ButtonA, gamepad?.buttons[A_BUTTON].pressed == true || isPressingK || isPressingSpace)
+        emulator.update_input(ButtonEvent.ButtonB, gamepad?.buttons[B_BUTTON].pressed == true || isPressingJ || isPressingShift)
+        emulator.update_input(ButtonEvent.Select, gamepad?.buttons[SELECT].pressed == true || isPressingTab)
+        emulator.update_input(ButtonEvent.Start, gamepad?.buttons[START].pressed == true || isPressingEnter)
+        emulator.update_input(ButtonEvent.Up, gamepad?.buttons[UP].pressed == true || isPressingW)
+        emulator.update_input(ButtonEvent.Down, gamepad?.buttons[DOWN].pressed == true || isPressingS)
+        emulator.update_input(ButtonEvent.Left, gamepad?.buttons[LEFT].pressed == true || isPressingA)
+        emulator.update_input(ButtonEvent.Right, gamepad?.buttons[RIGHT].pressed == true || isPressingD)
+
       }
 
 
@@ -193,9 +192,9 @@
 
         if (diff >= FPS_INTERVAL || previousTime == 0) {
           previousTime = time - (diff % FPS_INTERVAL)
+
           emulator.step_frame()
 
-          const currentTime = new Date().getTime()
           context.putImageData(getImageData(), 0, 0)
           handleJoypadInput()
         }
