@@ -23,21 +23,97 @@
 
       const emulator = new WasmEmulator()
 
-      const rustMemory = new Uint8Array(wasm.memory.buffer, emulator.get_picture_pointer())
-
-
       const romInput = document.getElementById("rom-input")
 
       romInput.addEventListener("change", (e) => {
         handleFileChange(e)
       })
 
-      document.addEventListener("keyup", (e) => {
+      let isPressingW = false
+      let isPressingA = false
+      let isPressingS = false
+      let isPressingD = false
 
+      let isPressingJ = false
+      let isPressingK = false
+
+      let isPressingSpace = false
+      let isPressingEnter = false
+      let isPressingTab = false
+      let isPressingShift = false
+
+      document.addEventListener("keyup", (e) => {
+        e.preventDefault()
+
+        switch (e.key) {
+          case "w":
+            isPressingW = false
+            break
+          case "a":
+            isPressingA = false
+            break
+          case "s":
+            isPressingS = false
+            break
+          case "d":
+            isPressingD = false
+            break
+          case "j":
+            isPressingJ = false
+            break
+          case "k":
+            isPressingK = false
+            break
+          case "Enter":
+            isPressingEnter = false
+            break
+          case "Tab":
+            isPressingTab = false
+            break
+          case "Space":
+            isPressingSpace = false
+            break
+          case "Shift":
+            isPressingShift = false
+            break
+        }
       })
 
       document.addEventListener("keydown", (e) => {
+        e.preventDefault()
 
+        switch (e.key) {
+          case "w":
+            isPressingW = true
+            break
+          case "a":
+            isPressingA = true
+            break
+          case "s":
+            isPressingS = true
+            break
+          case "d":
+            isPressingD = true
+            break
+          case "j":
+            isPressingJ = true
+            break
+          case "k":
+            isPressingK = true
+            break
+          case "Enter":
+            isPressingEnter = true
+            break
+          case "Tab":
+            isPressingTab = true
+            break
+          case "Space":
+            isPressingSpace = true
+            break
+          case "Shift":
+            isPressingShift = true
+            break
+        }
       })
 
       async function handleFileChange(e) {
@@ -68,8 +144,9 @@
       let previousTime = 0
 
       function getImageData() {
+        const rustMemory = new Uint8Array(wasm.memory.buffer, emulator.get_picture_pointer())
+
         const imageData = context.getImageData(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
-        const rustPointer = emulator.get_picture_pointer();
 
         for (let x = 0; x < SCREEN_WIDTH; x++) {
           for (let y = 0; y < SCREEN_HEIGHT; y++) {
@@ -99,14 +176,14 @@
         const gamepad = navigator.getGamepads()[0]
 
         if (gamepad != null) {
-          emulator.update_input(ButtonEvent.ButtonA, gamepad.buttons[A_BUTTON].pressed == true)
-          emulator.update_input(ButtonEvent.ButtonB, gamepad.buttons[B_BUTTON].pressed == true)
-          emulator.update_input(ButtonEvent.Select, gamepad.buttons[SELECT].pressed == true)
-          emulator.update_input(ButtonEvent.Start, gamepad.buttons[START].pressed == true)
-          emulator.update_input(ButtonEvent.Up, gamepad.buttons[UP].pressed == true)
-          emulator.update_input(ButtonEvent.Down, gamepad.buttons[DOWN].pressed == true)
-          emulator.update_input(ButtonEvent.Left, gamepad.buttons[LEFT].pressed == true)
-          emulator.update_input(ButtonEvent.Right, gamepad.buttons[RIGHT].pressed == true)
+          emulator.update_input(ButtonEvent.ButtonA, gamepad.buttons[A_BUTTON].pressed == true || isPressingK || isPressingSpace)
+          emulator.update_input(ButtonEvent.ButtonB, gamepad.buttons[B_BUTTON].pressed == true || isPressingJ || isPressingShift)
+          emulator.update_input(ButtonEvent.Select, gamepad.buttons[SELECT].pressed == true || isPressingTab)
+          emulator.update_input(ButtonEvent.Start, gamepad.buttons[START].pressed == true || isPressingEnter)
+          emulator.update_input(ButtonEvent.Up, gamepad.buttons[UP].pressed == true || isPressingW)
+          emulator.update_input(ButtonEvent.Down, gamepad.buttons[DOWN].pressed == true || isPressingS)
+          emulator.update_input(ButtonEvent.Left, gamepad.buttons[LEFT].pressed == true || isPressingA)
+          emulator.update_input(ButtonEvent.Right, gamepad.buttons[RIGHT].pressed == true || isPressingD)
         }
       }
 
@@ -142,6 +219,6 @@
       }
     }
 
-    main();
+    main()
   </script>
 </body>
