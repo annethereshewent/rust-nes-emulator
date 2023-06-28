@@ -4,3 +4,15 @@ This is yet another NES emulator written in Rust. I wanted to get more experienc
 
 Currently only the graphics are implemented, audio is still a work in progress.
 
+Currently there are two ways of running the emulator:
+
+* Desktop App
+* Web app
+
+## Desktop app
+
+To compile the desktop app, run `cargo build --release`. Then, with the executable generated, run `./nes-emulator <path-to-game>`.
+
+## Web app
+
+Web app is still in progress.
