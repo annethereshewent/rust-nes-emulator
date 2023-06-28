@@ -20,21 +20,18 @@ impl WasmEmulator {
     }
   }
 
-  #[wasm_bindgen]
   pub fn step_frame(&mut self) {
     let mut cycles = 0;
 
     while cycles < CYCLES_PER_FRAME {
-      cycles += self.cpu.tick() as usize;
+      cycles += (self.cpu.tick()*3) as usize;
     }
   }
 
-  #[wasm_bindgen]
   pub fn get_picture_pointer(&self) -> *const u8 {
     self.cpu.ppu.picture.data.as_ptr()
   }
 
-  #[wasm_bindgen]
   pub fn load(&mut self, rom: &[u8]) {
     let cartridge = Cartridge::new(rom.to_vec());
     self.cpu.load_game(cartridge);

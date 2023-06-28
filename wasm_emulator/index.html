@@ -1,0 +1,114 @@
+<body>
+  <style>
+    canvas {
+      margin: auto;
+      width: 50%;
+      image-rendering: pixelated;
+    }
+  </style>
+  <input type="file" id="rom-input">
+  <canvas width="256" height="240" id="canvas" />
+  <script src="jszip.min.js"></script>
+  <script type="module">
+    import init, { WasmEmulator } from "./pkg/nes_emulator_wasm.js"
+
+    const SCREEN_WIDTH = 256
+    const SCREEN_HEIGHT = 240
+    const FPS_INTERVAL = 1000 / 60
+
+    async function main() {
+      const path = "pkg/nes_emulator_wasm_bg.wasm"
+
+      const wasm = await init(path)
+
+      const emulator = new WasmEmulator()
+
+      const rustMemory = new Uint8Array(wasm.memory.buffer)
+
+      const romInput = document.getElementById("rom-input")
+
+      romInput.addEventListener("change", (e) => {
+        handleFileChange(e)
+      })
+
+      async function handleFileChange(e) {
+        if (e.target.files != null) {
+          const file = e.target.files[0]
+
+          let rom
+
+          if (file.name.indexOf(".zip") !== -1) {
+            // unzip the file first
+            const zipFile = await JSZip.loadAsync(file)
+            const fileName = Object.keys(zipFile.files)[0]
+
+            rom = await zipFile?.file(fileName)?.async('arraybuffer')
+          } else {
+            rom = await fileToArrayBuffer(file)
+          }
+
+          if (rom != null) {
+            emulator.load(new Uint8Array(rom));
+
+            requestAnimationFrame((time) => run(time))
+          }
+        }
+      }
+
+      const context = document.getElementById("canvas").getContext("2d")
+
+      let previousTime = 0
+
+      function getImageData() {
+        const imageData = context.getImageData(0,0, SCREEN_WIDTH, SCREEN_HEIGHT);
+        const rustPointer = emulator.get_picture_pointer();
+
+        for (let x = 0; x < SCREEN_WIDTH; x++) {
+          for (let y = 0; y < SCREEN_HEIGHT; y++) {
+            const imageIndex = x * 4 + y * SCREEN_WIDTH * 4;
+            const rustIndex = x * 3 + y * SCREEN_WIDTH * 3;
+
+            imageData.data[imageIndex] = rustMemory[rustPointer + rustIndex]
+            imageData.data[imageIndex+1] = rustMemory[rustPointer + rustIndex+1]
+            imageData.data[imageIndex+2] = rustMemory[rustPointer + rustIndex+2]
+            imageData.data[imageIndex+3] = 255
+          }
+        }
+
+        return imageData
+      }
+
+
+      async function run(time) {
+        const diff = time - previousTime
+
+        if (diff >= FPS_INTERVAL || previousTime == 0) {
+          previousTime = time - (diff % FPS_INTERVAL)
+          emulator.step_frame()
+          const currentTime = new Date().getTime()
+
+          context.putImageData(getImageData(), 0, 0)
+        }
+
+        requestAnimationFrame((time) => run(time))
+      }
+
+      function fileToArrayBuffer(file){
+        const fileReader = new FileReader()
+
+        return new Promise((resolve, reject) => {
+          fileReader.onload = () => resolve(fileReader.result)
+
+          fileReader.onerror = () => {
+            fileReader.abort()
+            reject(new Error("Error parsing file"))
+          }
+
+          fileReader.readAsArrayBuffer(file)
+        })
+      }
+    }
+
+    main();
+  </script>
+</body>
