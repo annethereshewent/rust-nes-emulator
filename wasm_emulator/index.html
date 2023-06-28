@@ -23,7 +23,7 @@
 
       const emulator = new WasmEmulator()
 
-      const rustMemory = new Uint8Array(wasm.memory.buffer)
+      const rustMemory = new Uint8Array(wasm.memory.buffer, emulator.get_picture_pointer())
 
       const romInput = document.getElementById("rom-input")
 
@@ -68,9 +68,9 @@
             const imageIndex = x * 4 + y * SCREEN_WIDTH * 4;
             const rustIndex = x * 3 + y * SCREEN_WIDTH * 3;
 
-            imageData.data[imageIndex] = rustMemory[rustPointer + rustIndex]
-            imageData.data[imageIndex+1] = rustMemory[rustPointer + rustIndex+1]
-            imageData.data[imageIndex+2] = rustMemory[rustPointer + rustIndex+2]
+            imageData.data[imageIndex] = rustMemory[rustIndex]
+            imageData.data[imageIndex+1] = rustMemory[rustIndex+1]
+            imageData.data[imageIndex+2] = rustMemory[rustIndex+2]
             imageData.data[imageIndex+3] = 255
           }
         }
