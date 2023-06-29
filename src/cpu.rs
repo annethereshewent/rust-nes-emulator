@@ -2,6 +2,8 @@ pub mod op_codes;
 pub mod ppu;
 pub mod apu;
 
+use self::apu::registers::status::Status;
+
 use super::cartridge::{Cartridge, Mirroring};
 use ppu::PPU;
 use apu::APU;
@@ -13,7 +15,8 @@ pub struct CPU {
   pub apu: APU,
   pub prg_length: usize,
   cycles: u16,
-  total_cycles: usize
+  total_cycles: usize,
+  pub audio_samples: Vec<f32>
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -59,7 +62,8 @@ impl CPU {
       ppu: PPU::new(Vec::new(), Mirroring::Vertical),
       apu: APU::new(),
       cycles: 0,
-      total_cycles: 0
+      total_cycles: 0,
+      audio_samples: Vec::new()
     }
   }
 
@@ -76,6 +80,7 @@ impl CPU {
 
         self.mem_read(mirrored_address)
       }
+      0x4015 => self.apu.read_status(),
       0x4016 => self.ppu.joypad.read(),
       0x8000 ..= 0xffff => {
         let prg_offset = address - 0x8000;
@@ -119,7 +124,9 @@ impl CPU {
       0x4006 => self.apu.pulse2.timer_low.set(value),
       0x4007 => self.apu.pulse2.timer_high.set(value),
       0x4014 => self.dma_transfer(value),
+      0x4015 => self.apu.write_status(value),
       0x4016 => self.ppu.joypad.write(value),
+      0x4017 => self.apu.write_frame_counter(value),
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
       _ => self.ignore_write()
     };
@@ -228,5 +235,9 @@ impl CPU {
     self.total_cycles += cycles as usize;
     self.ppu.tick(cycles * 3);
     self.apu.tick(cycles);
+
+    let audio_sample = self.apu.get_sample();
+
+    self.audio_samples.push(audio_sample);
   }
 }

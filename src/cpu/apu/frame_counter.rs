@@ -10,33 +10,73 @@ pub enum FrameCounterMode {
 }
 
 pub struct FrameCounter {
-  cycles: u16,
-  step: u16,
-  mode: FrameCounterMode
+  cycles: i16,
+  pub step: u16,
+  pub mode: FrameCounterMode,
+  buffer: Option<u8>,
+  write_delay: u8
 }
 
 impl FrameCounter {
   pub fn new() -> Self {
     Self {
-      cycles: STEP_CYCLES[0][0],
-      step: 0,
-      mode: FrameCounterMode::Step4
+      cycles: STEP_CYCLES[0][0] as i16,
+      step: 1,
+      mode: FrameCounterMode::Step4,
+      buffer: None,
+      write_delay: 0
     }
   }
 
-  pub fn tick(&mut self, cycles: u16) -> u16 {
+  pub fn write(&mut self, val: u8, cycles: usize) {
+    self.buffer = Some(val);
+
+    self.write_delay = if cycles % 1 == 1 { 4 } else { 3 };
+  }
+
+  pub fn poll(&mut self, cycles: u16) -> bool {
+    if let Some(val) = self.buffer {
+      self.write_delay -= cycles as u8;
+
+      if self.write_delay <= 0 {
+        self.update(val, cycles);
+        self.buffer = None;
+
+        return true;
+      }
+    }
+
+    false
+  }
+
+  pub fn update(&mut self, val: u8, cycles: u16) {
+    if val >> 7 == 1 {
+      self.mode = FrameCounterMode::Step5;
+    } else {
+      self.mode = FrameCounterMode::Step4;
+    }
+
+    self.step = 0;
+    self.cycles = STEP_CYCLES[self.mode as usize][self.step as usize] as i16;
+
+    if matches!(self.mode, FrameCounterMode::Step5) {
+      self.clock(cycles);
+    }
+  }
+
+  pub fn clock(&mut self, cycles: u16) -> u16 {
     if self.cycles > 0 {
-      self.cycles -= cycles;
+      self.cycles -= cycles as i16;
     }
     if self.cycles <= 0 {
       let clock = self.step;
       self.step += 1;
 
-      if self.step == 5 {
+      if self.step > 5 {
         self.step = 0;
       }
 
-      self.cycles = STEP_CYCLES[self.mode as usize][self.step as usize];
+      self.cycles += STEP_CYCLES[self.mode as usize][self.step as usize] as i16;
 
       clock
     } else {
