@@ -1,15 +1,19 @@
 pub mod op_codes;
 pub mod ppu;
+pub mod apu;
 
 use super::cartridge::{Cartridge, Mirroring};
 use ppu::PPU;
+use apu::APU;
 
 pub struct CPU {
   pub registers: Registers,
   pub memory: [u8; 0x10000],
   pub ppu: PPU,
+  pub apu: APU,
   pub prg_length: usize,
-  cycles: u16
+  cycles: u16,
+  total_cycles: usize
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -53,7 +57,9 @@ impl CPU {
       memory: [0; 0x10000],
       prg_length: 0,
       ppu: PPU::new(Vec::new(), Mirroring::Vertical),
-      cycles: 0
+      apu: APU::new(),
+      cycles: 0,
+      total_cycles: 0
     }
   }
 
@@ -104,6 +110,14 @@ impl CPU {
 
         self.mem_write(mirrored_address, value)
       }
+      0x4000 => self.apu.pulse1.control.set(value),
+      0x4001 => self.apu.pulse1.sweep.set(value),
+      0x4002 => self.apu.pulse1.timer_low.set(value),
+      0x4003 => self.apu.pulse1.timer_high.set(value),
+      0x4004 => self.apu.pulse2.control.set(value),
+      0x4005 => self.apu.pulse2.sweep.set(value),
+      0x4006 => self.apu.pulse2.timer_low.set(value),
+      0x4007 => self.apu.pulse2.timer_high.set(value),
       0x4014 => self.dma_transfer(value),
       0x4016 => self.ppu.joypad.write(value),
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
@@ -211,6 +225,8 @@ impl CPU {
 
   pub fn cycle(&mut self, cycles: u16) {
     self.cycles += cycles;
+    self.total_cycles += cycles as usize;
     self.ppu.tick(cycles * 3);
+    self.apu.tick(cycles);
   }
 }
