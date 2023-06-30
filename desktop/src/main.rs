@@ -72,7 +72,7 @@ fn main() {
   let device = audio_subsystem.open_playback(
     None,
     &spec,
-    |_| NesAudioCallback { volume: 0.25, cpu: &mut cpu }
+    |_| NesAudioCallback { volume: 1.00, cpu: &mut cpu }
   ).unwrap();
 
   device.resume();

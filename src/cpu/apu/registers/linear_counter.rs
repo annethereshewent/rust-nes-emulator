@@ -1,11 +1,15 @@
 pub struct LinearCounter {
-  val: u8
+  val: u8,
+  pub reload: bool,
+  pub counter: u8
 }
 
 impl LinearCounter {
   pub fn new() -> Self {
     Self {
-      val: 0
+      val: 0,
+      reload: false,
+      counter: 0
     }
   }
 

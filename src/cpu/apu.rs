@@ -169,7 +169,13 @@ impl APU {
   pub fn get_sample(&self) -> f32 {
     let pulse_index = (self.pulse1.output() + self.pulse2.output()) as usize % self.pulse_table.len();
 
-    self.pulse_table[pulse_index]
+    let triangle_out = self.triangle.output();
+    let noise_out = 0.0;
+    let dmc_out = 0.0;
+
+    let tnd_index = (3.0 * triangle_out + ((2.0 * noise_out) + dmc_out)) as usize;
+
+    self.pulse_table[pulse_index] + self.tnd_table[tnd_index]
   }
 
   pub fn write_frame_counter(&mut self, val: u8) {
