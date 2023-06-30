@@ -18,7 +18,7 @@ pub struct APU {
   pub status: Status,
   cycles: usize,
   half_cycle: u8,
-  irq_pending: bool,
+  pub irq_pending: bool,
   irq_inhibit: bool,
   pulse_table: [f32; 31],
   tnd_table: [f32; 203]

@@ -23,6 +23,7 @@ const STACK_BASE_ADDR: u16 = 0x0100;
 const STACK_START: u8 = 0xfd;
 
 const NMI_INTERRUPT_VECTOR_ADDRESS: u16 = 0xfffa;
+const IRQ_INTERRUPT_VECTOR_ADDRESS: u16 = 0xfffe;
 
 pub struct Registers {
   pub a: u8,
@@ -175,6 +176,9 @@ impl CPU {
     if self.ppu.nmi_triggered {
       self.trigger_interrupt(NMI_INTERRUPT_VECTOR_ADDRESS);
       self.ppu.nmi_triggered = false;
+    } else if self.apu.irq_pending && !self.registers.p.contains(CpuFlags::INTERRUPT_DISABLE) {
+      self.trigger_interrupt(IRQ_INTERRUPT_VECTOR_ADDRESS);
+      self.apu.irq_pending = false;
     }
 
     let op_code = self.mem_read(self.registers.pc);
