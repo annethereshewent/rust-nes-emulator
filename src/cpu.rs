@@ -238,5 +238,9 @@ impl CPU {
     self.total_cycles += cycles as usize;
     self.ppu.tick(cycles * 3);
     self.apu.tick(cycles);
+
+    // for i in 0..cycles {
+    //   self.apu.tick(1);
+    // }
   }
 }

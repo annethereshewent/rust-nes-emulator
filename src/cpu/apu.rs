@@ -8,7 +8,7 @@ pub mod registers;
 pub mod frame_counter;
 pub mod envelope;
 
-const CYCLES_PER_SAMPLE: usize = 4410000 / 1790000;
+const CYCLES_PER_SAMPLE: usize = (1790000 / 44100);
 
 pub struct APU {
   pub pulse1: Pulse,
@@ -101,7 +101,7 @@ impl APU {
     }
   }
 
-  fn sample_audio(&mut self) {
+  pub fn sample_audio(&mut self) {
     let audio_sample = self.get_sample();
 
     if self.audio_samples.len() < 4096 {
@@ -176,6 +176,7 @@ impl APU {
     let tnd_index = (3.0 * triangle_out + ((2.0 * noise_out) + dmc_out)) as usize;
 
     self.pulse_table[pulse_index] + self.tnd_table[tnd_index]
+    // self.pulse_table[pulse_index]
   }
 
   pub fn write_frame_counter(&mut self, val: u8) {

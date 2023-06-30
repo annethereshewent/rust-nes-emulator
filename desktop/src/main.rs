@@ -147,6 +147,7 @@ fn main() {
 
     cpu.ppu.cap_fps();
 
+
     // render the frame!
     texture.update(None, &cpu.ppu.picture.data, 256 * 3).unwrap();
 
