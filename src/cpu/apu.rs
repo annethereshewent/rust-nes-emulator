@@ -8,7 +8,7 @@ pub mod registers;
 pub mod frame_counter;
 pub mod envelope;
 
-const CYCLES_PER_SAMPLE: usize = (1790000 / 44100);
+const CYCLES_PER_SAMPLE: usize = 1790000 / 44100;
 
 pub struct APU {
   pub pulse1: Pulse,
