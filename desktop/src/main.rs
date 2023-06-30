@@ -25,27 +25,21 @@ impl AudioCallback for NesAudioCallback<'_> {
 
   fn callback(&mut self, buf: &mut [Self::Channel]) {
     let mut index = 0;
+    let mut apu = &mut self.cpu.apu;
 
     for b in buf.iter_mut() {
-      *b = if index >= self.cpu.buffer_index {
-        self.cpu.previous_value
+      *b = if index >= apu.buffer_index {
+        apu.previous_value
       } else {
-        self.cpu.audio_samples[index]
+        apu.audio_samples[index]
       };
 
-      self.cpu.previous_value = *b;
+      apu.previous_value = *b;
       *b *= self.volume;
       index += 1;
     }
 
-    index = 0;
-
-    for i in buf.len()..self.cpu.buffer_index {
-      self.cpu.audio_samples[index] = self.cpu.audio_samples[i];
-      index += 1;
-    }
-
-    self.cpu.buffer_index = index;
+    apu.buffer_index = 0;
   }
 }
 

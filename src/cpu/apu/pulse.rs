@@ -107,7 +107,6 @@ impl Pulse {
   fn sweep_force_silence(&self) -> bool {
     let next_freq = self.timer() + (self.timer() >> self.sweep.shift_count());
 
-
     self.timer() < 8 || (!self.sweep.negate_flag() && next_freq >= 0x800)
   }
 

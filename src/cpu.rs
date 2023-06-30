@@ -12,9 +12,6 @@ pub struct CPU {
   pub ppu: PPU,
   pub apu: APU,
   pub prg_length: usize,
-  pub audio_samples: Vec<f32>,
-  pub previous_value: f32,
-  pub buffer_index: usize,
   cycles: u16,
   total_cycles: usize,
 }
@@ -63,10 +60,7 @@ impl CPU {
       ppu: PPU::new(Vec::new(), Mirroring::Vertical),
       apu: APU::new(),
       cycles: 0,
-      total_cycles: 0,
-      audio_samples: Vec::new(),
-      previous_value: 0.0,
-      buffer_index: 0
+      total_cycles: 0
     }
   }
 
@@ -241,20 +235,5 @@ impl CPU {
     self.total_cycles += cycles as usize;
     self.ppu.tick(cycles * 3);
     self.apu.tick(cycles);
-
-    self.sample_audio();
-  }
-
-  fn sample_audio(&mut self) {
-    let audio_sample = self.apu.get_sample();
-
-    if self.buffer_index < 4096 {
-      if self.buffer_index >= self.audio_samples.len() {
-        self.audio_samples.push(audio_sample)
-      } else {
-        self.audio_samples[self.buffer_index] = audio_sample;
-      }
-      self.buffer_index += 1;
-    }
   }
 }

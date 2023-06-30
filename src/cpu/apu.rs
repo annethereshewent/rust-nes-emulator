@@ -8,6 +8,8 @@ pub mod registers;
 pub mod frame_counter;
 pub mod envelope;
 
+const CYCLES_PER_SAMPLE: usize = 4410000 / 1790000;
+
 pub struct APU {
   pub pulse1: Pulse,
   pub pulse2: Pulse,
@@ -16,9 +18,12 @@ pub struct APU {
   pub dmc: DMC,
   pub frame_counter: FrameCounter,
   pub status: Status,
+  pub audio_samples: Vec<f32>,
+  pub previous_value: f32,
+  pub buffer_index: usize,
+  pub irq_pending: bool,
   cycles: usize,
   half_cycle: u8,
-  pub irq_pending: bool,
   irq_inhibit: bool,
   pulse_table: [f32; 31],
   tnd_table: [f32; 203]
@@ -54,7 +59,10 @@ impl APU {
       irq_pending: false,
       status: Status::from_bits_truncate(0b0),
       pulse_table,
-      tnd_table
+      tnd_table,
+      audio_samples: Vec::new(),
+      previous_value: 0.0,
+      buffer_index: 0
     }
   }
 
@@ -88,6 +96,24 @@ impl APU {
     self.clock_frame_counter(cycles);
 
     self.cycles += cycles as usize;
+
+    if self.cycles >= CYCLES_PER_SAMPLE {
+      self.sample_audio();
+      self.cycles -= CYCLES_PER_SAMPLE;
+    }
+  }
+
+  fn sample_audio(&mut self) {
+    let audio_sample = self.get_sample();
+
+    if self.buffer_index < 4096 {
+      if self.buffer_index >= self.audio_samples.len() {
+        self.audio_samples.push(audio_sample)
+      } else {
+        self.audio_samples[self.buffer_index] = audio_sample;
+      }
+      self.buffer_index += 1;
+    }
   }
 
   fn clock_frame_counter(&mut self, cycles: u16) {
@@ -147,7 +173,6 @@ impl APU {
     self.status.bits()
   }
 
-  // TODO
   pub fn get_sample(&self) -> f32 {
     let pulse_index = (self.pulse1.output() + self.pulse2.output()) as usize % self.pulse_table.len();
 
