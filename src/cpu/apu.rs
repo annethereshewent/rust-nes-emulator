@@ -1,4 +1,4 @@
-use self::{pulse::Pulse, triangle::Triangle, noise::Noise, dmc::DMC, frame_counter::{FrameCounter, FrameCounterMode}, registers::status::Status};
+use self::{pulse::{Pulse, PulseChannel}, triangle::Triangle, noise::Noise, dmc::DMC, frame_counter::{FrameCounter, FrameCounterMode}, registers::status::Status};
 
 pub mod pulse;
 pub mod triangle;
@@ -6,6 +6,7 @@ pub mod noise;
 pub mod dmc;
 pub mod registers;
 pub mod frame_counter;
+pub mod envelope;
 
 pub struct APU {
   pub pulse1: Pulse,
@@ -18,14 +19,26 @@ pub struct APU {
   cycles: usize,
   half_cycle: u8,
   irq_pending: bool,
-  irq_inhibit: bool
+  irq_inhibit: bool,
+  pulse_table: [f32; 31],
+  tnd_table: [f32; 203]
 }
 
 impl APU {
   pub fn new() -> Self {
+    let mut pulse_table = [0.0; 31];
+    for (i, val) in pulse_table.iter_mut().enumerate().skip(1) {
+        *val = 95.52 / (8_128.0 / (i as f32) + 100.0);
+    }
+
+    let mut tnd_table = [0.0; 203];
+    for (i, val) in tnd_table.iter_mut().enumerate().skip(1) {
+        *val = 163.67 / (24_329.0 / (i as f32) + 100.0);
+    }
+
     Self {
-      pulse1: Pulse::new(),
-      pulse2: Pulse::new(),
+      pulse1: Pulse::new(PulseChannel::One),
+      pulse2: Pulse::new(PulseChannel::Two),
       triangle: Triangle::new(),
       noise: Noise::new(),
       dmc: DMC::new(),
@@ -34,7 +47,9 @@ impl APU {
       frame_counter: FrameCounter::new(),
       irq_inhibit: false,
       irq_pending: false,
-      status: Status::from_bits_truncate(0b0)
+      status: Status::from_bits_truncate(0b0),
+      pulse_table,
+      tnd_table
     }
   }
 
@@ -127,8 +142,11 @@ impl APU {
     self.status.bits()
   }
 
+  // TODO
   pub fn get_sample(&self) -> f32 {
-    0.0
+    let pulse1 = self.pulse1.output();
+
+    self.pulse_table[pulse1 as usize]
   }
 
   pub fn write_frame_counter(&mut self, val: u8) {

@@ -1,11 +1,15 @@
 pub struct Sweep {
-  val: u8
+  val: u8,
+  pub reload: bool,
+  pub counter: u8,
 }
 
 impl Sweep {
   pub fn new() -> Self {
     Self {
-      val: 0
+      val: 0,
+      reload: false,
+      counter: 0
     }
   }
   pub fn enabled(&self) -> bool {
@@ -26,5 +30,6 @@ impl Sweep {
 
   pub fn set(&mut self, val: u8) {
     self.val = val;
+    self.reload = true;
   }
 }

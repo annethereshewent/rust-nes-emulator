@@ -16,6 +16,7 @@ impl Control {
     (self.val >> 5) & 0b1
   }
 
+  // envelope is disabled if this is set to 1
   pub fn constant_vol_env_flag(&self) -> u8 {
     (self.val >> 4) & 0b1
   }
