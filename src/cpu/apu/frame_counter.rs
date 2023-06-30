@@ -14,7 +14,7 @@ pub struct FrameCounter {
   pub step: u16,
   pub mode: FrameCounterMode,
   buffer: Option<u8>,
-  write_delay: u8
+  write_delay: i8
 }
 
 impl FrameCounter {
@@ -36,7 +36,7 @@ impl FrameCounter {
 
   pub fn poll(&mut self, cycles: u16) -> bool {
     if let Some(val) = self.buffer {
-      self.write_delay -= cycles as u8;
+      self.write_delay -= cycles as i8;
 
       if self.write_delay <= 0 {
         self.update(val, cycles);

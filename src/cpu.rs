@@ -2,8 +2,6 @@ pub mod op_codes;
 pub mod ppu;
 pub mod apu;
 
-use self::apu::registers::status::Status;
-
 use super::cartridge::{Cartridge, Mirroring};
 use ppu::PPU;
 use apu::APU;
@@ -14,9 +12,9 @@ pub struct CPU {
   pub ppu: PPU,
   pub apu: APU,
   pub prg_length: usize,
+  pub audio_samples: Vec<f32>,
   cycles: u16,
   total_cycles: usize,
-  pub audio_samples: Vec<f32>
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;

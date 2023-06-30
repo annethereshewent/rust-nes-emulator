@@ -144,9 +144,9 @@ impl APU {
 
   // TODO
   pub fn get_sample(&self) -> f32 {
-    let pulse1 = self.pulse1.output();
+    let pulse_index = (self.pulse1.output() + self.pulse2.output()) as usize % self.pulse_table.len() ;
 
-    self.pulse_table[pulse1 as usize]
+    self.pulse_table[pulse_index]
   }
 
   pub fn write_frame_counter(&mut self, val: u8) {

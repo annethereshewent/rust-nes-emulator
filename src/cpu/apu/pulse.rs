@@ -15,7 +15,7 @@ pub struct Pulse {
   pub sweep: Sweep,
   pub timer_low: TimerLow,
   pub timer_high: TimerHigh,
-  frequency_counter: u16,
+  frequency_counter: i16,
   duty_counter: u8,
   envelope: Envelope,
   length_counter: u8,
@@ -50,9 +50,9 @@ impl Pulse {
 
   pub fn tick(&mut self, cycles: u16) {
     if self.frequency_counter > 0 {
-      self.frequency_counter -= cycles;
+      self.frequency_counter -= cycles as i16;
     } else {
-      self.frequency_counter = self.timer();
+      self.frequency_counter = self.timer() as i16;
 
       self.duty_counter = (self.duty_counter + 1) % 8
     }
@@ -111,7 +111,7 @@ impl Pulse {
   pub fn write_timer_high(&mut self, val: u8) {
     self.timer_high.set(val);
 
-    self.frequency_counter = self.timer();
+    self.frequency_counter = self.timer() as i16;
 
     self.duty_counter = 0;
 
