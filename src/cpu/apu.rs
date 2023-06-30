@@ -24,6 +24,11 @@ pub struct APU {
   tnd_table: [f32; 203]
 }
 
+pub const LENGTH_TABLE: [u8; 32] = [
+  10, 254, 20, 2, 40, 4, 80, 6, 160, 8, 60, 10, 14, 12, 26, 14, 12, 16, 24, 18, 48, 20, 96,
+  22, 192, 24, 72, 26, 16, 28, 32, 30,
+];
+
 impl APU {
   pub fn new() -> Self {
     let mut pulse_table = [0.0; 31];
@@ -144,7 +149,7 @@ impl APU {
 
   // TODO
   pub fn get_sample(&self) -> f32 {
-    let pulse_index = (self.pulse1.output() + self.pulse2.output()) as usize % self.pulse_table.len() ;
+    let pulse_index = (self.pulse1.output() + self.pulse2.output()) as usize % self.pulse_table.len();
 
     self.pulse_table[pulse_index]
   }

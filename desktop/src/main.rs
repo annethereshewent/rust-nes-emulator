@@ -17,9 +17,7 @@ use std::{env, fs};
 
 struct NesAudioCallback<'a> {
   volume: f32,
-  audio_samples: &'a mut Vec<f32>,
-  previous_value: f32,
-  buffer_index: usize
+  cpu: &'a mut CPU
 }
 
 impl AudioCallback for NesAudioCallback<'_> {
@@ -29,24 +27,25 @@ impl AudioCallback for NesAudioCallback<'_> {
     let mut index = 0;
 
     for b in buf.iter_mut() {
-      *b = match index >= self.buffer_index {
-        true => self.previous_value,
-        false => self.audio_samples[index]
+      *b = if index >= self.cpu.buffer_index {
+        self.cpu.previous_value
+      } else {
+        self.cpu.audio_samples[index]
       };
 
-      self.previous_value = *b;
+      self.cpu.previous_value = *b;
       *b *= self.volume;
       index += 1;
     }
 
     index = 0;
 
-    for i in buf.len()..self.buffer_index {
-      self.audio_samples[index] = self.audio_samples[i];
+    for i in buf.len()..self.cpu.buffer_index {
+      self.cpu.audio_samples[index] = self.cpu.audio_samples[i];
       index += 1;
     }
 
-    self.buffer_index = index;
+    self.cpu.buffer_index = index;
   }
 }
 
@@ -79,7 +78,7 @@ fn main() {
   let device = audio_subsystem.open_playback(
     None,
     &spec,
-    |_| NesAudioCallback { volume: 0.25, audio_samples: & mut cpu.audio_samples, previous_value: 0.0, buffer_index: 0 }
+    |_| NesAudioCallback { volume: 0.25, cpu: &mut cpu }
   ).unwrap();
 
   device.resume();

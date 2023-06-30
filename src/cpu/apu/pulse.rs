@@ -1,4 +1,5 @@
 
+use super::LENGTH_TABLE;
 use super::envelope::Envelope;
 use super::registers::control::Control;
 use super::registers::sweep::Sweep;
@@ -105,6 +106,8 @@ impl Pulse {
 
   fn sweep_force_silence(&self) -> bool {
     let next_freq = self.timer() + (self.timer() >> self.sweep.shift_count());
+
+
     self.timer() < 8 || (!self.sweep.negate_flag() && next_freq >= 0x800)
   }
 
@@ -116,6 +119,10 @@ impl Pulse {
     self.duty_counter = 0;
 
     self.envelope.reset = true;
+
+    if self.enabled {
+      self.length_counter = LENGTH_TABLE[(val >> 3) as usize];
+    }
 
   }
 
