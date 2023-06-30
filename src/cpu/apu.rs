@@ -18,7 +18,8 @@ pub struct APU {
   pub dmc: DMC,
   pub frame_counter: FrameCounter,
   pub status: Status,
-  pub audio_samples: Vec<f32>,
+  pub audio_samples: [f32; 4096],
+  pub buffer_index: usize,
   pub previous_value: f32,
   pub irq_pending: bool,
   cycles: usize,
@@ -59,8 +60,9 @@ impl APU {
       status: Status::from_bits_truncate(0b0),
       pulse_table,
       tnd_table,
-      audio_samples: Vec::new(),
-      previous_value: 0.0
+      audio_samples: [0.0; 4096],
+      previous_value: 0.0,
+      buffer_index: 0
     }
   }
 
@@ -104,8 +106,9 @@ impl APU {
   pub fn sample_audio(&mut self) {
     let audio_sample = self.get_sample();
 
-    if self.audio_samples.len() < 4096 {
-      self.audio_samples.push(audio_sample);
+    if self.buffer_index < 4096 {
+      self.audio_samples[self.buffer_index] = audio_sample;
+      self.buffer_index += 1;
     }
   }
 
