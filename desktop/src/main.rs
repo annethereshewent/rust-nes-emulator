@@ -28,7 +28,7 @@ impl AudioCallback for NesAudioCallback<'_> {
     let mut apu = &mut self.cpu.apu;
 
     for b in buf.iter_mut() {
-      *b = if index >= apu.buffer_index {
+      *b = if index >= apu.audio_samples.len() {
         apu.previous_value
       } else {
         apu.audio_samples[index]
@@ -39,7 +39,7 @@ impl AudioCallback for NesAudioCallback<'_> {
       index += 1;
     }
 
-    apu.buffer_index = 0;
+    apu.audio_samples = Vec::new();
   }
 }
 

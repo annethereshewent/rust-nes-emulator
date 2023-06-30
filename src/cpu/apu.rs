@@ -20,7 +20,6 @@ pub struct APU {
   pub status: Status,
   pub audio_samples: Vec<f32>,
   pub previous_value: f32,
-  pub buffer_index: usize,
   pub irq_pending: bool,
   cycles: usize,
   half_cycle: u8,
@@ -61,8 +60,7 @@ impl APU {
       pulse_table,
       tnd_table,
       audio_samples: Vec::new(),
-      previous_value: 0.0,
-      buffer_index: 0
+      previous_value: 0.0
     }
   }
 
@@ -106,13 +104,8 @@ impl APU {
   fn sample_audio(&mut self) {
     let audio_sample = self.get_sample();
 
-    if self.buffer_index < 4096 {
-      if self.buffer_index >= self.audio_samples.len() {
-        self.audio_samples.push(audio_sample)
-      } else {
-        self.audio_samples[self.buffer_index] = audio_sample;
-      }
-      self.buffer_index += 1;
+    if self.audio_samples.len() < 4096 {
+      self.audio_samples.push(audio_sample);
     }
   }
 
