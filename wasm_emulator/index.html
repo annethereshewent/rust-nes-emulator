@@ -157,9 +157,9 @@
       function playAudio() {
         const bufferSize = emulator.get_buffer_index() + 1
 
-        const rustAudioBuffer = new Float32Array(wasm.memory.buffer, emulator.get_audio_sample_pointer(), emulator.get_buffer_index())
+        const rustAudioBuffer = new Float32Array(wasm.memory.buffer, emulator.get_audio_sample_pointer(), bufferSize)
 
-        const audioBuffer = emptyBuffers.length ? emptyBuffers.pop() : audioContext.createBuffer(1, emulator.get_buffer_index(), SAMPLE_RATE)
+        const audioBuffer = emptyBuffers.length ? emptyBuffers.pop() : audioContext.createBuffer(1, bufferSize, SAMPLE_RATE)
 
         audioBuffer.copyToChannel(rustAudioBuffer, 0)
 
@@ -180,7 +180,7 @@
 
         source.start(start)
 
-        nextStartTime = start + emulator.get_buffer_index() / SAMPLE_RATE
+        nextStartTime = start + bufferSize / SAMPLE_RATE
       }
 
       let previousTime = 0
@@ -235,10 +235,11 @@
         if (diff >= FPS_INTERVAL || previousTime == 0) {
           previousTime = time - (diff % FPS_INTERVAL)
 
+          playAudio()
           emulator.step_frame()
           context.putImageData(getImageData(), 0, 0)
 
-          playAudio()
+
           handleJoypadInput()
         }
 
