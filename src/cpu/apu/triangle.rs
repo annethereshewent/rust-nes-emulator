@@ -45,8 +45,8 @@ impl Triangle {
 
   pub fn output(&self) -> f32 {
     if self.is_ultrasonic {
-      0.0
-    } else if self.step >> 5 == 1 {
+      7.5
+    } else if (self.step >> 4) & 0b1 == 1 {
       (self.step ^ 0x1f) as f32
     } else {
       self.step as f32
