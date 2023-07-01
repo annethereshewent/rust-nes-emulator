@@ -1,4 +1,4 @@
-use super::registers::flags_rate_register::FlagsRateRegister;
+use super::registers::flags_rate::FlagsRateRegister;
 
 // see https://www.nesdev.org/wiki/APU_DMC
 const FREQUENCY_TABLE: [i16; 16] = [

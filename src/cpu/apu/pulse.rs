@@ -64,7 +64,7 @@ impl Pulse {
   }
 
   pub fn clock_quarter_frame(&mut self) {
-    self.envelope.clock(&self.control);
+    self.envelope.clock(self.control.envelope_divider_period(), self.control.length_counter_halt());
   }
 
   pub fn clock_half_frame(&mut self) {
