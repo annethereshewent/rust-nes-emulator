@@ -7,11 +7,41 @@ use nes_emulator::cpu::CPU;
 
 use nes_emulator::cpu::ppu::joypad::ButtonStatus;
 use nes_emulator::cpu::ppu::{CYCLES_PER_FRAME, SCREEN_HEIGHT, SCREEN_WIDTH};
+use sdl2::audio::{AudioSpecDesired, AudioCallback};
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::event::Event;
 
 use std::{env, fs};
+
+
+struct NesAudioCallback<'a> {
+  volume: f32,
+  cpu: &'a mut CPU
+}
+
+impl AudioCallback for NesAudioCallback<'_> {
+  type Channel = f32;
+
+  fn callback(&mut self, buf: &mut [Self::Channel]) {
+    let mut index = 0;
+    let mut apu = &mut self.cpu.apu;
+
+    for b in buf.iter_mut() {
+      *b = if index >= apu.buffer_index {
+        apu.previous_value
+      } else {
+        apu.audio_samples[index]
+      };
+
+      apu.previous_value = *b;
+      *b *= self.volume;
+      index += 1;
+    }
+
+    apu.buffer_index = 0;
+  }
+}
 
 fn main() {
   let args: Vec<String> = env::args().collect();
@@ -29,8 +59,23 @@ fn main() {
 
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();
+  let audio_subsystem = sdl_context.audio().unwrap();
 
   let game_controller_subsystem = sdl_context.game_controller().unwrap();
+
+  let spec = AudioSpecDesired {
+    freq: Some(44100),
+    channels: Some(1),
+    samples: Some(4096)
+  };
+
+  let device = audio_subsystem.open_playback(
+    None,
+    &spec,
+    |_| NesAudioCallback { volume: 0.5, cpu: &mut cpu }
+  ).unwrap();
+
+  device.resume();
 
   let available = game_controller_subsystem
       .num_joysticks()
@@ -101,6 +146,7 @@ fn main() {
     }
 
     cpu.ppu.cap_fps();
+
 
     // render the frame!
     texture.update(None, &cpu.ppu.picture.data, 256 * 3).unwrap();

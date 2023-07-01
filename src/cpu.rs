@@ -1,21 +1,26 @@
 pub mod op_codes;
 pub mod ppu;
+pub mod apu;
 
 use super::cartridge::{Cartridge, Mirroring};
 use ppu::PPU;
+use apu::APU;
 
 pub struct CPU {
   pub registers: Registers,
   pub memory: [u8; 0x10000],
   pub ppu: PPU,
+  pub apu: APU,
   pub prg_length: usize,
-  cycles: u16
+  cycles: u16,
+  total_cycles: u64,
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
 const STACK_START: u8 = 0xfd;
 
 const NMI_INTERRUPT_VECTOR_ADDRESS: u16 = 0xfffa;
+const IRQ_INTERRUPT_VECTOR_ADDRESS: u16 = 0xfffe;
 
 pub struct Registers {
   pub a: u8,
@@ -53,7 +58,9 @@ impl CPU {
       memory: [0; 0x10000],
       prg_length: 0,
       ppu: PPU::new(Vec::new(), Mirroring::Vertical),
-      cycles: 0
+      apu: APU::new(),
+      cycles: 0,
+      total_cycles: 0
     }
   }
 
@@ -70,6 +77,7 @@ impl CPU {
 
         self.mem_read(mirrored_address)
       }
+      0x4015 => self.apu.read_status(),
       0x4016 => self.ppu.joypad.read(),
       0x8000 ..= 0xffff => {
         let prg_offset = address - 0x8000;
@@ -104,8 +112,28 @@ impl CPU {
 
         self.mem_write(mirrored_address, value)
       }
+      0x4000 => self.apu.pulse1.control.set(value),
+      0x4001 => self.apu.pulse1.sweep.set(value),
+      0x4002 => self.apu.pulse1.timer_low.set(value),
+      0x4003 => self.apu.pulse1.write_timer_high(value),
+      0x4004 => self.apu.pulse2.control.set(value),
+      0x4005 => self.apu.pulse2.sweep.set(value),
+      0x4006 => self.apu.pulse2.timer_low.set(value),
+      0x4007 => self.apu.pulse2.write_timer_high(value),
+      0x4008 => self.apu.triangle.write_linear_counter(value),
+      0x400a => self.apu.triangle.timer_low.set(value),
+      0x4010 => self.apu.dmc.write_rate_register(value),
+      0x4011 => self.apu.dmc.direct_load = value & 0b1111111,
+      0x4012 => self.apu.dmc.set_sample_address(value),
+      0x4013 => self.apu.dmc.set_sample_length(value),
+      0x400b => self.apu.triangle.write_timer_high(value),
+      0x400c => self.apu.noise.control.set(value),
+      0x400e => self.apu.noise.write_timer(value),
+      0x400f => self.apu.noise.write_length(value),
       0x4014 => self.dma_transfer(value),
+      0x4015 => self.apu.write_status(value),
       0x4016 => self.ppu.joypad.write(value),
+      0x4017 => self.apu.write_frame_counter(value),
       0x8000 ..= 0xffff => panic!("attempting to write to rom"),
       _ => self.ignore_write()
     };
@@ -122,6 +150,20 @@ impl CPU {
       self.ppu.oam_data[self.ppu.oam_address as usize] = self.mem_read(i + upper);
       self.ppu.oam_address = self.ppu.oam_address.wrapping_add(1);
     }
+
+    let cycles: u16 = if self.total_cycles % 2 == 0 { 513 } else { 514 };
+
+    self.cycle(cycles);
+  }
+
+  pub fn dmc_dma_transfer(&mut self) {
+    let val = self.mem_read(self.apu.dmc.sample_address);
+
+    self.apu.dmc.load_buffer(val);
+
+    let cycles: u16 = if self.total_cycles %2 == 0 { 3 } else { 4 };
+
+    self.cycle(cycles);
   }
 
   pub fn mem_write_u16(&mut self, address: u16, value: u16) {
@@ -151,9 +193,20 @@ impl CPU {
 
   pub fn tick(&mut self) -> u16 {
     self.cycles = 0;
+
+    if self.apu.dmc.dma_pending {
+      self.dmc_dma_transfer();
+    }
+
     if self.ppu.nmi_triggered {
       self.trigger_interrupt(NMI_INTERRUPT_VECTOR_ADDRESS);
       self.ppu.nmi_triggered = false;
+    } else if self.apu.irq_pending && !self.registers.p.contains(CpuFlags::INTERRUPT_DISABLE) {
+      self.trigger_interrupt(IRQ_INTERRUPT_VECTOR_ADDRESS);
+      self.apu.irq_pending = false;
+    } else if self.apu.dmc.irq_pending && !self.registers.p.contains(CpuFlags::INTERRUPT_DISABLE) {
+      self.trigger_interrupt(IRQ_INTERRUPT_VECTOR_ADDRESS);
+      self.apu.dmc.irq_pending = false;
     }
 
     let op_code = self.mem_read(self.registers.pc);
@@ -211,6 +264,12 @@ impl CPU {
 
   pub fn cycle(&mut self, cycles: u16) {
     self.cycles += cycles;
+    self.total_cycles = self.total_cycles.wrapping_add(cycles as u64);
     self.ppu.tick(cycles * 3);
+    self.apu.tick(cycles);
+
+    // for i in 0..cycles {
+    //   self.apu.tick(1);
+    // }
   }
 }
