@@ -67,6 +67,8 @@ impl APU {
   }
 
   pub fn tick(&mut self, cycles: u16) {
+    self.dmc.check_dma_status(cycles as i8);
+
     let remainder = cycles % 2;
     let halved_cycles = cycles / 2;
 
@@ -157,7 +159,7 @@ impl APU {
   }
 
   pub fn toggle_channels(&mut self) {
-    self.dmc.toggle(self.status.contains(Status::DMC_ENABLE));
+    self.dmc.toggle(self.status.contains(Status::DMC_ENABLE), self.cycles);
     self.noise.toggle(self.status.contains(Status::NOISE_ENABLE));
     self.pulse1.toggle(self.status.contains(Status::PULSE1_ENABLE));
     self.pulse2.toggle(self.status.contains(Status::PULSE2_ENABLE));
@@ -174,7 +176,9 @@ impl APU {
 
     let triangle_out = self.triangle.output();
     let noise_out = 0.0;
-    let dmc_out = 0.0;
+    let dmc_out = self.dmc.output();
+
+    println!("{}", dmc_out);
 
     let tnd_index = (3.0 * triangle_out + ((2.0 * noise_out) + dmc_out)) as usize;
 

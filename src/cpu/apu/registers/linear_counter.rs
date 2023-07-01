@@ -18,7 +18,7 @@ impl LinearCounter {
   }
 
   pub fn counter_reload(&self) -> u8 {
-    self.val & 0b111111
+    self.val & 0b1111111
   }
 
   pub fn set(&mut self, val: u8) {
