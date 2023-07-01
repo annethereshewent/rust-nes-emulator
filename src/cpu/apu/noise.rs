@@ -28,7 +28,7 @@ impl Noise {
       enabled: false,
       frequency_counter: 0,
       frequency_timer: 0,
-      shift: 0,
+      shift: 1,
       length_counter: 0,
       envelope: Envelope::new(),
       shift_mode: ShiftMode::Zero,
@@ -47,8 +47,9 @@ impl Noise {
       let bit1 = self.shift & 1;
       let bit2 = (self.shift >> shift_amount) & 0b1;
 
-      self.shift = (self.shift & SHIFT_BIT_MASK) | (bit1 ^ bit2) << 14;
+      self.shift = (self.shift & SHIFT_BIT_MASK) | ((bit1 ^ bit2) << 14);
       self.shift >>= 1;
+
     }
   }
 
@@ -75,6 +76,7 @@ impl Noise {
     if self.enabled {
       self.length_counter = LENGTH_TABLE[(val > 3) as usize];
     }
+    self.envelope.reset = true
   }
 
   pub fn write_timer(&mut self, val: u8) {
