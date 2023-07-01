@@ -146,21 +146,16 @@
       const context = document.getElementById("canvas").getContext("2d")
 
       let audioContext = null
-      let gainNode = null
 
       function startAudio() {
         audioContext = new AudioContext({ sampleRate: SAMPLE_RATE })
-
-        gainNode = audioContext.createGain()
-
-        gainNode.gain.setValueAtTime(1, 0)
       }
 
       let nextStartTime = 0
       let emptyBuffers = []
 
       function playAudio() {
-        gainNode.gain.setValueAtTime(1, audioContext.currentTime)
+        const bufferSize = emulator.get_buffer_index() + 1
 
         const rustAudioBuffer = new Float32Array(wasm.memory.buffer, emulator.get_audio_sample_pointer(), emulator.get_buffer_index())
 
@@ -174,7 +169,7 @@
 
         source.buffer = audioBuffer
 
-        source.connect(gainNode).connect(audioContext.destination)
+        source.connect(audioContext.destination)
         source.onended = () => {
           emptyBuffers.push(audioBuffer)
         }
