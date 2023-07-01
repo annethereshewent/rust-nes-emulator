@@ -12,7 +12,8 @@ use nes_emulator::cartridge::Cartridge;
 #[wasm_bindgen]
 pub struct WasmEmulator {
   cpu: CPU,
-  key_map: HashMap<ButtonEvent, ButtonStatus>
+  key_map: HashMap<ButtonEvent, ButtonStatus>,
+  read_index: u16
 }
 
 #[derive(PartialEq, Eq, Hash)]
@@ -45,8 +46,25 @@ impl WasmEmulator {
 
     WasmEmulator {
       cpu: CPU::new(),
-      key_map
+      key_map,
+      read_index: 0
     }
+  }
+
+  pub fn set_buffer_index(&mut self, index: usize) {
+    self.cpu.apu.buffer_index = index;
+  }
+
+  pub fn get_audio_sample_pointer(&self) -> *const f32 {
+    self.cpu.apu.audio_samples.as_ptr()
+  }
+
+  pub fn get_buffer_index(&self) -> usize {
+    self.cpu.apu.buffer_index
+  }
+
+  pub fn get_read_index(&self) -> u16 {
+    self.read_index
   }
 
   pub fn step_frame(&mut self) {
