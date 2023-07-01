@@ -7,11 +7,6 @@ const FREQUENCY_TABLE: [i16; 16] = [
   0x06a, 0x054, 0x048, 0x036
 ];
 
-const TIMER_TABLE: [i16; 16] = [
-  428, 380, 340, 320, 286, 254, 226, 214,
-  190, 160, 142, 128, 106,  84,  72,  54
-];
-
 pub struct DMC {
   pub flags_rate_register: FlagsRateRegister,
   pub direct_load: u8,

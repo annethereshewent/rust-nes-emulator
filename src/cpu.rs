@@ -157,6 +157,10 @@ impl CPU {
     let val = self.mem_read(self.apu.dmc.sample_address);
 
     self.apu.dmc.load_buffer(val);
+
+    let cycles: u16 = if self.total_cycles %2 == 0 { 3 } else { 4 };
+
+    self.cycle(cycles);
   }
 
   pub fn mem_write_u16(&mut self, address: u16, value: u16) {
@@ -190,7 +194,6 @@ impl CPU {
     if self.apu.dmc.dma_pending {
       self.dmc_dma_transfer();
     }
-
 
     if self.ppu.nmi_triggered {
       self.trigger_interrupt(NMI_INTERRUPT_VECTOR_ADDRESS);
