@@ -178,8 +178,6 @@ impl APU {
     let noise_out = 0.0;
     let dmc_out = self.dmc.output();
 
-    println!("{}", dmc_out);
-
     let tnd_index = (3.0 * triangle_out + ((2.0 * noise_out) + dmc_out)) as usize;
 
     self.pulse_table[pulse_index] + self.tnd_table[tnd_index]
