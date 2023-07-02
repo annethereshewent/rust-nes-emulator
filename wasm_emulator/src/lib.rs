@@ -30,6 +30,18 @@ pub enum ButtonEvent {
 }
 
 #[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+}
+
+macro_rules! console_log {
+  // Note that this is using the `log` function imported above during
+  // `bare_bones`
+  ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
 impl WasmEmulator {
   #[wasm_bindgen(constructor)]
   pub fn new() -> Self {
@@ -65,6 +77,24 @@ impl WasmEmulator {
 
   pub fn get_read_index(&self) -> u16 {
     self.read_index
+  }
+
+  pub fn update_buffer(&mut self, buffer: &mut [f32]) {
+    let mut apu = &mut self.cpu.apu;
+
+    let mut previous_sample = 0.0;
+
+    for (i, sample) in buffer.iter_mut().enumerate() {
+      *sample = if i < apu.buffer_index {
+        apu.audio_samples[i]
+      } else {
+        previous_sample
+      };
+
+      previous_sample = *sample;
+    }
+
+    apu.buffer_index = 0;
   }
 
   pub fn step_frame(&mut self) {
