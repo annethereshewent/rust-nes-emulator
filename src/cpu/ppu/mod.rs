@@ -437,50 +437,6 @@ impl PPU {
     [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
   }
 
-  // fn render(&mut self) {
-  //   let creator = self.canvas.texture_creator();
-  //   let mut texture = creator
-  //       .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
-  //       .unwrap();
-
-  //   texture.update(None, &self.picture.data, 256 * 3).unwrap();
-
-  //   self.canvas.copy(&texture, None, None).unwrap();
-
-  //   self.canvas.present();
-
-  //   for event in self.event_pump.poll_iter() {
-  //     match event {
-  //       Event::Quit { .. }
-  //       | Event::KeyDown {
-  //           keycode: Some(Keycode::Escape),
-  //           ..
-  //       } => std::process::exit(0),
-  //       Event::KeyDown { keycode, .. }=> {
-  //         if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
-  //           self.joypad.set_button(*button, true);
-  //         }
-  //       }
-  //       Event::KeyUp { keycode, .. } => {
-  //         if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
-  //           self.joypad.set_button(*button, false);
-  //         }
-  //       }
-  //       Event::JoyButtonDown { button_idx, .. } => {
-  //         if let Some(button) = self.joypad_map.get(&button_idx){
-  //           self.joypad.set_button(*button, true);
-  //         }
-  //       }
-  //       Event::JoyButtonUp { button_idx, .. } => {
-  //         if let Some(button) = self.joypad_map.get(&button_idx){
-  //           self.joypad.set_button(*button, false);
-  //         }
-  //       }
-  //       _ => { /* do nothing */ }
-  //     }
-  //   }
-  // }
-
   pub fn read_oam_data(&self) -> u8 {
     self.oam_data[self.oam_address as usize]
   }
