@@ -21,7 +21,7 @@ impl FrameCounter {
   pub fn new() -> Self {
     Self {
       cycles: STEP_CYCLES[0][0] as i16,
-      step: 1,
+      step: 0,
       mode: FrameCounterMode::Step4,
       buffer: None,
       write_delay: 0

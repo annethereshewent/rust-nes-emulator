@@ -4,7 +4,7 @@ const FREQUENCY_TABLE: [u16; 16] = [
   4, 8, 16, 32, 64, 96, 128, 160, 202, 254, 380, 508, 762, 1016, 2034, 4068
 ];
 
-const SHIFT_BIT_MASK: u16 = !0x8000;
+const SHIFT_BIT_15_MASK: u16 = 0b111111111111111;
 
 enum ShiftMode {
   Zero,
@@ -47,9 +47,8 @@ impl Noise {
       let bit1 = self.shift & 1;
       let bit2 = (self.shift >> shift_amount) & 0b1;
 
-      self.shift = (self.shift & SHIFT_BIT_MASK) | ((bit1 ^ bit2) << 14);
+      self.shift = (self.shift & SHIFT_BIT_15_MASK) | ((bit1 ^ bit2) << 14);
       self.shift >>= 1;
-
     }
   }
 
