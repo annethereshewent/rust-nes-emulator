@@ -158,6 +158,8 @@
         scriptProcessor.connect(audioContext.destination)
       }
 
+      let previousTime = 0
+
       function getImageData() {
         const rustMemory = new Uint8Array(wasm.memory.buffer, emulator.get_picture_pointer())
 
