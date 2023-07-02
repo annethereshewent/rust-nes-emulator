@@ -8,7 +8,9 @@ use apu::APU;
 
 pub struct CPU {
   pub registers: Registers,
-  pub memory: [u8; 0x10000],
+  memory: [u8; 0x2000],
+  prg_rom: Vec<u8>,
+  prg_ram: Vec<u8>,
   pub ppu: PPU,
   pub apu: APU,
   pub prg_length: usize,
@@ -55,7 +57,9 @@ impl CPU {
         y: 0,
         sp: STACK_START
       },
-      memory: [0; 0x10000],
+      memory: [0; 0x2000],
+      prg_rom: Vec::new(),
+      prg_ram: Vec::new(),
       prg_length: 0,
       ppu: PPU::new(Vec::new(), Vec::new(), Mirroring::Vertical),
       apu: APU::new(),
@@ -80,14 +84,14 @@ impl CPU {
       0x4015 => self.apu.read_status(),
       0x4016 => self.ppu.joypad.read(),
       0x8000 ..= 0xffff => {
-        let prg_offset = address - 0x8000;
+        let prg_address = address - 0x8000;
 
-        if self.prg_length == 0x4000 && prg_offset >= 0x4000 {
-          let actual_address = (prg_offset % 0x4000) + 0x8000;
+        if self.prg_length == 0x4000 && prg_address >= 0x4000 {
+          let actual_address = prg_address % 0x4000;
 
-          self.memory[actual_address as usize]
+          self.prg_rom[actual_address as usize]
         } else {
-          self.memory[address as usize]
+          self.prg_rom[prg_address as usize]
         }
       }
       _ => 0
@@ -97,7 +101,6 @@ impl CPU {
   pub fn mem_write(&mut self, address: u16, value: u8) {
     match address {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize] = value,
-      // 0x2000 ..= 0x3fff => self.memory[(address & 0b100000_00000111) as usize] = value,
       0x2000 => self.ppu.write_to_control(value),
       0x2001 => self.ppu.write_to_mask(value),
       0x2002 => panic!("attempting to write to read only ppu register"),
@@ -134,7 +137,10 @@ impl CPU {
       0x4015 => self.apu.write_status(value),
       0x4016 => self.ppu.joypad.write(value),
       0x4017 => self.apu.write_frame_counter(value),
-      0x8000 ..= 0xffff => panic!("attempting to write to rom"),
+      0x8000 ..= 0xffff => {
+        let prg_address = address - 0x8000;
+        self.prg_ram[prg_address as usize] = value
+      },
       _ => self.ignore_write()
     };
   }
@@ -182,14 +188,15 @@ impl CPU {
   }
 
   pub fn load_game(&mut self, cartridge: Cartridge) {
-    self.memory[0x8000 .. (0x8000 + cartridge.prg_rom.len())].copy_from_slice(&cartridge.prg_rom[..]);
     self.prg_length = cartridge.prg_rom.len();
+
+    self.prg_rom = cartridge.prg_rom;
+    self.prg_ram = cartridge.prg_ram;
     self.ppu.chr_rom = cartridge.chr_rom;
     self.ppu.chr_ram = cartridge.chr_ram;
     self.ppu.mirroring = cartridge.mirroring;
 
     self.registers.pc = self.mem_read_u16(0xfffc);
-    // self.registers.pc = 0xc000;
   }
 
   pub fn tick(&mut self) -> u16 {
