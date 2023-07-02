@@ -239,6 +239,7 @@
 
       const A_BUTTON = 0
       const B_BUTTON = 1
+      const X_BUTTON = 2
       const SELECT = 8
       const START = 9
       const UP = 12
@@ -250,7 +251,7 @@
         const gamepad = navigator.getGamepads()[0]
 
         emulator.update_input(ButtonEvent.ButtonA, gamepad?.buttons[A_BUTTON].pressed == true || isPressingK || isPressingSpace)
-        emulator.update_input(ButtonEvent.ButtonB, gamepad?.buttons[B_BUTTON].pressed == true || isPressingJ || isPressingShift)
+        emulator.update_input(ButtonEvent.ButtonB, gamepad?.buttons[X_BUTTON].pressed == true || isPressingJ || isPressingShift)
         emulator.update_input(ButtonEvent.Select, gamepad?.buttons[SELECT].pressed == true || isPressingTab)
         emulator.update_input(ButtonEvent.Start, gamepad?.buttons[START].pressed == true || isPressingEnter)
         emulator.update_input(ButtonEvent.Up, gamepad?.buttons[UP].pressed == true || isPressingW)
