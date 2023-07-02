@@ -15,7 +15,7 @@ To compile the desktop app, run `cargo build --release`. Then, with the executab
 
 ## Web app
 
-Web app is still in progress.
+Web app is now available at https://annethereshewent.github.io/
 
 ## Screenshots
 
