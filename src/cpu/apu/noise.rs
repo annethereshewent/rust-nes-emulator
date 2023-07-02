@@ -47,8 +47,10 @@ impl Noise {
       let bit1 = self.shift & 1;
       let bit2 = (self.shift >> shift_amount) & 0b1;
 
-      self.shift = (self.shift & SHIFT_BIT_15_MASK) | ((bit1 ^ bit2) << 14);
+
       self.shift >>= 1;
+      self.shift = (self.shift & SHIFT_BIT_15_MASK) | ((bit1 ^ bit2) << 14);
+
     }
   }
 
@@ -73,7 +75,7 @@ impl Noise {
 
   pub fn write_length(&mut self, val: u8) {
     if self.enabled {
-      self.length_counter = LENGTH_TABLE[(val > 3) as usize];
+      self.length_counter = LENGTH_TABLE[(val >> 3) as usize];
     }
     self.envelope.reset = true
   }
