@@ -210,10 +210,8 @@
         if (diff >= FPS_INTERVAL || previousTime == 0) {
           previousTime = time - (diff % FPS_INTERVAL)
 
-          // playAudio()
           emulator.step_frame()
           context.putImageData(getImageData(), 0, 0)
-
 
           handleJoypadInput()
         }
