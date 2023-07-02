@@ -2,6 +2,7 @@
 
 pub mod cpu;
 pub mod cartridge;
+pub mod mapper;
 
 #[macro_use]
 extern crate bitflags;
