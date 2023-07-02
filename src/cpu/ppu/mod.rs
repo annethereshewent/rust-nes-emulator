@@ -527,9 +527,9 @@ impl PPU {
       0x2000 ..=0x2fff => self.vram[self.mirror_vram_index(address) as usize] = value,
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
-        self.palette_table[(address_mirror - 0x3f00) as usize] = value;
+        self.palette_table[((address_mirror - 0x3f00) % self.palette_table.len() as u16) as usize] = value;
       }
-      0x3f00 ..=0x3fff => self.palette_table[(address - 0x3f00) as usize] = value,
+      0x3f00 ..=0x3fff => self.palette_table[((address - 0x3f00) % self.palette_table.len() as u16) as usize] = value,
       _ => panic!("shouldn't get here")
     }
 
@@ -559,12 +559,16 @@ impl PPU {
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
 
-        self.palette_table[(address_mirror - 0x3f00) as usize]
+        self.internal_data = self.vram[self.mirror_vram_index(address - 0x1000) as usize];
+
+        self.palette_table[((address_mirror - 0x3f00) % self.palette_table.len() as u16) as usize]
       }
 
       0x3f00..=0x3fff =>
       {
-        self.palette_table[(address - 0x3f00) as usize]
+        self.internal_data = self.vram[self.mirror_vram_index(address - 0x1000) as usize];
+
+        self.palette_table[((address - 0x3f00) % self.palette_table.len() as u16) as usize]
       }
       _ => panic!("shouldn't get here")
     }
