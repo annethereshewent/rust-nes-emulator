@@ -123,6 +123,7 @@ pub struct PPU {
   ppu_addr: AddressRegister,
   pub palette_table: [u8; 32],
   pub chr_rom: Vec<u8>,
+  pub chr_ram: Vec<u8>,
   pub vram: [u8; 2048],
   pub oam_data: [u8; 256],
   pub oam_address: u8,
@@ -138,7 +139,7 @@ pub struct PPU {
 }
 
 impl PPU {
-  pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+  pub fn new(chr_rom: Vec<u8>, chr_ram: Vec<u8>, mirroring: Mirroring) -> Self {
     PPU {
       ctrl: ControlRegister::from_bits_truncate(0b00000000),
       mask: MaskRegister::from_bits_truncate(0b00000000),
@@ -146,6 +147,7 @@ impl PPU {
       status: StatusRegister::from_bits_truncate(0b00000000),
       ppu_addr: AddressRegister::new(),
       chr_rom,
+      chr_ram,
       oam_data: [0; 256],
       oam_address: 0,
       vram: [0; 2048],
@@ -249,6 +251,14 @@ impl PPU {
     !self.status.contains(StatusRegister::SPRITE_ZERO_HIT)
   }
 
+  fn read_chr(&self, address: u16) -> u8 {
+    if !self.chr_rom.is_empty() {
+      self.chr_rom[address as usize]
+    } else {
+      self.chr_ram[address as usize]
+    }
+  }
+
   fn draw_sprites(&mut self) {
     let y = self.current_scanline;
 
@@ -278,8 +288,8 @@ impl PPU {
 
         let tile_index = bank + tile_number as u16 * 16;
 
-        let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16) as usize];
-        let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16 + 8) as usize];
+        let lower_byte = self.read_chr(tile_index + y_pos_in_tile as u16);
+        let upper_byte = self.read_chr(tile_index + y_pos_in_tile as u16 + 8);
 
         for x in 0..8 {
           let bit_pos = if x_flip {
@@ -363,8 +373,8 @@ impl PPU {
       let x_pos_in_tile = scrolled_x % 8;
       let y_pos_in_tile = scrolled_y % 8;
 
-      let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile) as usize];
-      let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile + 8) as usize];
+      let lower_byte = self.read_chr(tile_index + y_pos_in_tile);
+      let upper_byte = self.read_chr(tile_index + y_pos_in_tile + 8);
 
       let bit_pos = 7 - x_pos_in_tile;
 
@@ -509,7 +519,11 @@ impl PPU {
     let address = self.ppu_addr.get();
 
     match address {
-      0x0000 ..= 0x1fff => println!("attempting to write to chr rom, {:X}", address),
+      0x0000 ..= 0x1fff => {
+        if !self.chr_ram.is_empty() {
+          self.chr_ram[address as usize] = value;
+        }
+      },
       0x2000 ..=0x2fff => self.vram[self.mirror_vram_index(address) as usize] = value,
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
@@ -531,7 +545,7 @@ impl PPU {
       0x0000 ..= 0x1fff => {
         let result = self.internal_data;
 
-        self.internal_data = self.chr_rom[address as usize];
+        self.internal_data = self.read_chr(address);
 
         result
       },
@@ -544,6 +558,7 @@ impl PPU {
       }
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
+
         self.palette_table[(address_mirror - 0x3f00) as usize]
       }
 

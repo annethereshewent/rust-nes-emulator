@@ -57,7 +57,7 @@ impl CPU {
       },
       memory: [0; 0x10000],
       prg_length: 0,
-      ppu: PPU::new(Vec::new(), Mirroring::Vertical),
+      ppu: PPU::new(Vec::new(), Vec::new(), Mirroring::Vertical),
       apu: APU::new(),
       cycles: 0,
       total_cycles: 0
@@ -185,6 +185,7 @@ impl CPU {
     self.memory[0x8000 .. (0x8000 + cartridge.prg_rom.len())].copy_from_slice(&cartridge.prg_rom[..]);
     self.prg_length = cartridge.prg_rom.len();
     self.ppu.chr_rom = cartridge.chr_rom;
+    self.ppu.chr_ram = cartridge.chr_ram;
     self.ppu.mirroring = cartridge.mirroring;
 
     self.registers.pc = self.mem_read_u16(0xfffc);
