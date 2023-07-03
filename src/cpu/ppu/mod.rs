@@ -15,6 +15,7 @@ use self::registers::address::AddressRegister;
 use picture::Picture;
 
 use crate::cartridge::Mirroring;
+use crate::mapper::{Mapper, Empty};
 
 pub const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
@@ -136,6 +137,7 @@ pub struct PPU {
   pub joypad: Joypad,
   background_pixels_drawn: Vec<bool>,
   previous_time: u128,
+  pub mapper: Mapper
 }
 
 impl PPU {
@@ -160,7 +162,8 @@ impl PPU {
       picture: Picture::new(),
       joypad: Joypad::new(),
       background_pixels_drawn: Vec::new(),
-      previous_time: 0
+      previous_time: 0,
+      mapper: Mapper::Empty(Empty {})
     }
   }
 

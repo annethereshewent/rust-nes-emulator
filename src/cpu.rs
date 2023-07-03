@@ -2,13 +2,15 @@ pub mod op_codes;
 pub mod ppu;
 pub mod apu;
 
+use crate::mapper::MapperActions;
+
 use super::cartridge::{Cartridge, Mirroring};
 use ppu::PPU;
 use apu::APU;
 
 pub struct CPU {
   pub registers: Registers,
-  memory: [u8; 0x2000],
+  memory: [u8; 0x800],
   prg_rom: Vec<u8>,
   prg_ram: Vec<u8>,
   pub ppu: PPU,
@@ -57,7 +59,7 @@ impl CPU {
         y: 0,
         sp: STACK_START
       },
-      memory: [0; 0x2000],
+      memory: [0; 0x0800],
       prg_rom: Vec::new(),
       prg_ram: Vec::new(),
       prg_length: 0,
@@ -137,6 +139,11 @@ impl CPU {
       0x4015 => self.apu.write_status(value),
       0x4016 => self.ppu.joypad.write(value),
       0x4017 => self.apu.write_frame_counter(value),
+      0x6000 ..= 0x7fff => {
+        if let Some(mapped_address) = self.ppu.mapper.map_write(address, value) {
+          self.prg_ram[mapped_address as usize] = value;
+        }
+      }
       0x8000 ..= 0xffff => {
         let prg_address = address - 0x8000;
         self.prg_ram[prg_address as usize] = value
@@ -195,6 +202,7 @@ impl CPU {
     self.ppu.chr_rom = cartridge.chr_rom;
     self.ppu.chr_ram = cartridge.chr_ram;
     self.ppu.mirroring = cartridge.mirroring;
+    self.ppu.mapper = cartridge.mapper;
 
     self.registers.pc = self.mem_read_u16(0xfffc);
   }

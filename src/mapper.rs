@@ -3,35 +3,38 @@ pub mod mmc1;
 use mmc1::Mmc1;
 
 pub enum Mapper {
-  None,
+  Empty(Empty),
   Mmc1(Mmc1)
 }
 
-pub enum MappedRead {
-  None,
-  Chr(usize),
-  PrgRom(usize),
-  PrgRam(usize),
-}
-
-pub enum MappedWrite {
-  None,
-  Chr(usize, u8),
-  PrgRam(usize, u8)
-}
-
-pub trait MemMap {
-  fn map_read(&mut self, address: u16) -> MappedRead {
-    MappedRead::None
+pub trait MapperActions {
+  fn map_read(&mut self, address: u16) -> u16 {
+    0
   }
 
-  fn map_write(&mut self, address: u16, val: u8) -> MappedWrite {
-    MappedWrite::None
+  fn map_write(&mut self, address: u16, val: u8) -> Option<u16> {
+    None
+  }
+
+  fn clock(&mut self) {
+
   }
 }
 
-impl MemMap for Mapper {
-  fn map_read(&mut self, address: u16) -> MappedRead {
-    MappedRead::None
+impl MapperActions for Mapper {
+  fn map_read(&mut self, address: u16) -> u16 {
+    0
+  }
+
+  fn map_write(&mut self, address: u16, val: u8) -> Option<u16> {
+    None
+  }
+
+  fn clock(&mut self) {
+
   }
 }
+
+pub struct Empty { }
+
+impl MapperActions for Empty { }
