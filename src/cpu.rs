@@ -320,13 +320,9 @@ impl CPU {
     self.ppu.tick(cycles * 3);
     self.apu.tick(cycles);
 
-    for i in 0..cycles {
-      match &mut self.ppu.mapper {
-        Mapper::Sxrom(sxrom) => {
-          sxrom.tick()
-        },
-        _ => ()
-      }
+    match &mut self.ppu.mapper {
+      Mapper::Sxrom(sxrom) => sxrom.tick(cycles as u8),
+      _ => ()
     }
   }
 }

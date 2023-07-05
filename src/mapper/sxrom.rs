@@ -177,7 +177,7 @@ impl Sxrom {
       BankType::Prg => {
         let page = self.prg_rom_banks[self.get_bank_number(address, PRG_ROM_RANGE, PRG_ROM_BANK_SIZE)];
 
-        Some(page | (address as usize) & (PRG_ROM_BANK_SIZE-1))
+        Some(page | (address as usize) & (PRG_ROM_BANK_SIZE - 1))
       }
     }
   }
@@ -197,9 +197,9 @@ impl MapperActions for Sxrom {
     }
   }
 
-  fn tick(&mut self) {
+  fn tick(&mut self, cycles: u8) {
     if self.registers.write_occurred > 0 {
-      self.registers.write_occurred -= 1;
+      self.registers.write_occurred -= cycles;
     }
   }
 

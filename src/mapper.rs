@@ -8,29 +8,29 @@ pub enum Mapper {
 }
 
 pub trait MapperActions {
-  fn mem_read(&mut self, address: u16) -> Option<usize> {
+  fn mem_read(&mut self, _address: u16) -> Option<usize> {
     None
   }
 
-  fn mem_write(&mut self, address: u16, val: u8) -> Option<usize> {
+  fn mem_write(&mut self, _address: u16, _val: u8) -> Option<usize> {
     None
   }
 
-  fn tick(&mut self) {
+  fn tick(&mut self, cycles: u8) {
 
   }
 }
 
 impl MapperActions for Mapper {
-  fn mem_read(&mut self, address: u16) -> Option<usize> {
+  fn mem_read(&mut self, _address: u16) -> Option<usize> {
     None
   }
 
-  fn mem_write(&mut self, address: u16, val: u8) -> Option<usize> {
+  fn mem_write(&mut self, _address: u16, _val: u8) -> Option<usize> {
     None
   }
 
-  fn tick(&mut self) {
+  fn tick(&mut self, cycles: u8) {
 
   }
 }
