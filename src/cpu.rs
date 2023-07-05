@@ -106,8 +106,8 @@ impl CPU {
               self.prg_rom[prg_address as usize]
             }
           }
-          Mapper::Sxrom(sxrom) => {
-            if let Some(mapped_address) = sxrom.mem_read(address) {
+          _ => {
+            if let Some(mapped_address) = self.ppu.mapper.mem_read(address) {
               self.prg_rom[mapped_address]
             } else {
               0
@@ -159,22 +159,12 @@ impl CPU {
       0x4016 => self.ppu.joypad.write(value),
       0x4017 => self.apu.write_frame_counter(value),
       0x6000..=0x7fff => {
-        match &mut self.ppu.mapper {
-          Mapper::Sxrom(sxrom) => {
-            if let Some(mapped_address) = sxrom.mem_write(address, value) {
-              self.prg_ram[mapped_address as usize] = value;
-            }
-          }
-          _ => ()
+        if let Some(mapped_address) = self.ppu.mapper.mem_write(address, value) {
+          self.prg_ram[mapped_address as usize] = value;
         }
       }
       0x8000..=0xffff => {
-        match &mut self.ppu.mapper {
-          Mapper::Sxrom(sxrom) => {
-            sxrom.mem_write(address, value);
-          }
-          _ => ()
-        }
+        self.ppu.mapper.mem_write(address, value);
       }
       _ => self.ignore_write()
     };
@@ -312,9 +302,6 @@ impl CPU {
     self.ppu.tick(cycles * 3);
     self.apu.tick(cycles);
 
-    match &mut self.ppu.mapper {
-      Mapper::Sxrom(sxrom) => sxrom.tick(cycles as u8),
-      _ => ()
-    }
+    self.ppu.mapper.tick(cycles as u8);
   }
 }
