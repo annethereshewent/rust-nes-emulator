@@ -3,7 +3,7 @@ const CHR_ROM_MULTIPLIER: usize = 8192;
 
 const NES_ASCII: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-use crate::mapper::{Mapper, mmc1::Mmc1, Empty};
+use crate::mapper::{Mapper, sxrom::Sxrom, Empty};
 
 pub enum Mirroring {
   Horizontal,
@@ -70,7 +70,7 @@ impl Cartridge {
 
     cartridge.mapper = match mapper_number {
       0 => Mapper::Empty(Empty {}),
-      1 => Mapper::Mmc1(Mmc1::load(&mut cartridge)),
+      1 => Mapper::Sxrom(Sxrom::load(&mut cartridge)),
       _ => panic!("unsupported mapper: {mapper_number}")
     };
 

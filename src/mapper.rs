@@ -1,36 +1,36 @@
-pub mod mmc1;
+pub mod sxrom;
 
-use mmc1::Mmc1;
+use sxrom::Sxrom;
 
 pub enum Mapper {
   Empty(Empty),
-  Mmc1(Mmc1)
+  Sxrom(Sxrom)
 }
 
 pub trait MapperActions {
-  fn map_read(&mut self, address: u16) -> u16 {
-    0
-  }
-
-  fn map_write(&mut self, address: u16, val: u8) -> Option<u16> {
+  fn mem_read(&mut self, address: u16) -> Option<usize> {
     None
   }
 
-  fn clock(&mut self) {
+  fn mem_write(&mut self, address: u16, val: u8) -> Option<usize> {
+    None
+  }
+
+  fn tick(&mut self) {
 
   }
 }
 
 impl MapperActions for Mapper {
-  fn map_read(&mut self, address: u16) -> u16 {
-    0
-  }
-
-  fn map_write(&mut self, address: u16, val: u8) -> Option<u16> {
+  fn mem_read(&mut self, address: u16) -> Option<usize> {
     None
   }
 
-  fn clock(&mut self) {
+  fn mem_write(&mut self, address: u16, val: u8) -> Option<usize> {
+    None
+  }
+
+  fn tick(&mut self) {
 
   }
 }
