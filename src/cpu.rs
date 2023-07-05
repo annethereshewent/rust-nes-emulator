@@ -158,14 +158,6 @@ impl CPU {
       0x4015 => self.apu.write_status(value),
       0x4016 => self.ppu.joypad.write(value),
       0x4017 => self.apu.write_frame_counter(value),
-      // 0x6000 ..= 0x7fff => {
-      //   if let Some(mapped_address) = self.ppu.mapper.mem_write(address, value) {
-      //     self.prg_ram[mapped_address as usize] = value;
-      //   }
-      // }
-      // 0x8000 ..=0xffff => {
-      //   self.ppu.mapper.mem_write(address, value);
-      // }
       0x6000..=0x7fff => {
         match &mut self.ppu.mapper {
           Mapper::Sxrom(sxrom) => {
@@ -210,7 +202,7 @@ impl CPU {
 
     self.apu.dmc.load_buffer(val);
 
-    let cycles: u16 = if self.total_cycles %2 == 0 { 3 } else { 4 };
+    let cycles: u16 = if self.total_cycles % 2 == 0 { 3 } else { 4 };
 
     self.cycle(cycles);
   }

@@ -9,16 +9,13 @@ const CHR_BANK_SIZE: usize = 4096;
 const _PRG_RAM_BANK_SIZE: usize = 8192;
 const PRG_ROM_BANK_SIZE: usize = 16_384;
 
-const PRG_ROM_RANGE: usize = 0xffff - 0x8000;
-const CHR_RANGE: usize = 0x1fff;
-
 enum BankType {
   Chr,
   Prg
 }
 
 struct SxromRegisters {
-  write_occurred: u8,
+  write_occurred: i8,
   shift: u8,
   control: u8,
   chr0: u8,
@@ -61,7 +58,7 @@ impl Sxrom {
     let mut sxrom = Self {
       registers: SxromRegisters {
         write_occurred: 0,
-        shift: 0,
+        shift: 0x0,
         control: 0xc,
         chr0: 0,
         chr1: 0,
@@ -96,71 +93,68 @@ impl Sxrom {
   }
 
   fn update_banks(&mut self, address: u16) {
-    if (self.registers.control >> 1) & 0b1 == 1 {
-      let mirroring_type = self.registers.control & 0b11;
-      self.mirroring = match mirroring_type {
-        0 => Mirroring::SingleScreenA,
-        1 => Mirroring::SingleScreenB,
-        2 => Mirroring::Vertical,
-        3 => Mirroring::Horizontal,
-        _ => panic!("impossible")
-      };
+    let mirroring_type = self.registers.control & 0b11;
+    self.mirroring = match mirroring_type {
+      0 => Mirroring::SingleScreenA,
+      1 => Mirroring::SingleScreenB,
+      2 => Mirroring::Vertical,
+      3 => Mirroring::Horizontal,
+      _ => panic!("impossible")
+    };
 
-      let chr_bank_mode = (self.registers.control >> 4) & 0b1;
+    let chr_bank_mode = (self.registers.control >> 4) & 0b1;
 
-      if chr_bank_mode == 1 {
-        self.chr_banks[0] = self.get_bank_address(self.registers.chr0, self.chr_page_size-1, self.chr_shift);
-        self.chr_banks[1] = self.get_bank_address(self.registers.chr1, self.chr_page_size-1, self.chr_shift);
-      } else {
-        let bank = self.registers.chr0 & 0b11110; // ignore lower bit of register in mode 0
-        // let new_address = ((bank_number & (self.chr_page_size -1)) as usize) << self.chr_shift;
-        let new_address = self.get_bank_address(bank, self.chr_page_size-1, self.chr_shift);
+    if chr_bank_mode == 1 {
+      self.chr_banks[0] = self.get_bank_address(self.registers.chr0, self.chr_page_size-1, self.chr_shift);
+      self.chr_banks[1] = self.get_bank_address(self.registers.chr1, self.chr_page_size-1, self.chr_shift);
+    } else {
+      let bank = self.registers.chr0 & 0b11110; // ignore lower bit of register in mode 0
+      // let new_address = ((bank_number & (self.chr_page_size -1)) as usize) << self.chr_shift;
+      let new_address = self.get_bank_address(bank, self.chr_page_size-1, self.chr_shift);
 
-        self.chr_banks[0] = new_address;
-        self.chr_banks[1] = new_address + CHR_BANK_SIZE;
+      self.chr_banks[0] = new_address;
+      self.chr_banks[1] = new_address + CHR_BANK_SIZE;
+    }
+
+    // finally set prg banks
+    let prg_mode = self.registers.control >> 2 & 0b11;
+
+    let extra_register = if matches!(address, 0xc000..=0xdfff) && chr_bank_mode == 1 {
+      self.registers.chr1
+    } else {
+      self.registers.chr0
+    };
+
+    let bank_select = if self.chr_select {
+      extra_register & 0b10000
+    } else {
+      0
+    };
+
+    let prg_bank = self.registers.prg & 0b1111; // only first 4 bits matter, last bit is for prg ram enable
+
+    // per https://www.nesdev.org/wiki/MMC1#PRG_bank_(internal,_$E000-$FFFF)
+    match prg_mode {
+      // switch 32 KB at $8000, ignoring low bit of bank number;
+      0 | 1 => {
+        let bank_number = bank_select | (prg_bank & 0b11110);
+
+        let new_address = self.get_bank_address(bank_number, self.prg_rom_page_size-1, self.prg_shift);
+
+        self.prg_rom_banks[0] = new_address;
+        self.prg_rom_banks[1] = new_address + PRG_ROM_BANK_SIZE;
       }
-
-      // finally set prg banks
-      let prg_mode = self.registers.control >> 2 & 0b11;
-
-      let extra_register = if matches!(address, 0xc000..=0xdfff) && chr_bank_mode == 1 {
-        self.registers.chr1
-      } else {
-        self.registers.chr0
-      };
-
-      let bank_select = if self.chr_select {
-        extra_register & 0b10000
-      } else {
-        0
-      };
-
-      let prg_bank = self.registers.prg & 0b1111; // only first 4 bits matter, last bit is for prg ram enable
-
-      // per https://www.nesdev.org/wiki/MMC1#PRG_bank_(internal,_$E000-$FFFF)
-      match prg_mode {
-        // switch 32 KB at $8000, ignoring low bit of bank number;
-        0 | 1 => {
-          let bank_number = bank_select | (prg_bank & 0b11110);
-
-          let new_address = self.get_bank_address(bank_number, self.prg_rom_page_size-1, self.prg_shift);
-
-          self.prg_rom_banks[0] = new_address;
-          self.prg_rom_banks[1] = new_address + PRG_ROM_BANK_SIZE;
-        }
-        // fix first bank at $8000 and switch 16 KB bank at $C000;
-        2 => {
-          self.prg_rom_banks[0] = self.get_bank_address(bank_select, self.prg_rom_page_size-1, self.prg_shift);
-          self.prg_rom_banks[1] = self.get_bank_address(bank_select | prg_bank, self.prg_rom_page_size-1, self.prg_shift);
-        }
-        // fix last bank at $C000 and switch 16 KB bank at $8000
-        3 => {
-          self.prg_rom_banks[0] = self.get_bank_address(bank_select | prg_bank, self.prg_rom_page_size-1, self.prg_shift);
-          self.prg_rom_banks[1] = self.get_bank_address((self.prg_rom_page_size - 1) | bank_select, self.prg_rom_page_size-1, self.prg_shift);
-        },
-        _ => panic!("can't happen")
+      // fix first bank at $8000 and switch 16 KB bank at $C000;
+      2 => {
+        self.prg_rom_banks[0] = self.get_bank_address(bank_select, self.prg_rom_page_size-1, self.prg_shift);
+        self.prg_rom_banks[1] = self.get_bank_address(bank_select | prg_bank, self.prg_rom_page_size-1, self.prg_shift);
       }
-
+      // fix last bank at $C000 and switch 16 KB bank at $8000
+      3 => {
+        self.prg_rom_banks[0] = self.get_bank_address(bank_select | prg_bank, self.prg_rom_page_size-1, self.prg_shift);
+        self.prg_rom_banks[1] = self.get_bank_address((self.prg_rom_page_size - 1) | bank_select, self.prg_rom_page_size-1, self.prg_shift);
+      },
+      _ => panic!("can't happen")
     }
   }
 
@@ -171,19 +165,39 @@ impl Sxrom {
   fn translate_address(&self, address: u16, bank_type: BankType) -> Option<usize> {
     match bank_type {
       BankType::Chr => {
-        let page = self.chr_banks[self.get_bank_number(address, CHR_RANGE, CHR_BANK_SIZE)];
+        let page = self.chr_banks[self.get_chr_bank_number(address)];
         Some(page | (address as usize) & (CHR_BANK_SIZE - 1))
       }
       BankType::Prg => {
-        let page = self.prg_rom_banks[self.get_bank_number(address, PRG_ROM_RANGE, PRG_ROM_BANK_SIZE)];
+        let page = self.prg_rom_banks[self.get_prg_bank_number(address)];
 
         Some(page | (address as usize) & (PRG_ROM_BANK_SIZE - 1))
       }
     }
   }
 
-  fn get_bank_number(&self, address: u16, mask: usize, capacity: usize) -> usize {
-    (address as usize & mask) / capacity
+  fn get_prg_bank_number(&self, address: u16) -> usize {
+    match address {
+      0x8000..=0xbfff => {
+        0
+      }
+      0xc000..=0xffff => {
+        1
+      }
+      _ => panic!("not possible")
+    }
+  }
+
+  fn get_chr_bank_number(&self, address: u16) -> usize {
+    match address {
+      0x0000..=0x0fff => {
+        0
+      }
+      0x1000..=0x1fff => {
+        1
+      }
+      _ => panic!("not possible")
+    }
   }
 }
 
@@ -199,7 +213,7 @@ impl MapperActions for Sxrom {
 
   fn tick(&mut self, cycles: u8) {
     if self.registers.write_occurred > 0 {
-      self.registers.write_occurred -= cycles;
+      self.registers.write_occurred -= cycles as i8;
     }
   }
 
@@ -220,22 +234,23 @@ impl MapperActions for Sxrom {
               self.registers.shift |= (val & 0b1) << self.registers.current_shift_write;
 
               self.registers.current_shift_write += 1;
-            } else {
-              // write to the register designated in the address
-              match address {
-                0x8000..=0x9fff => self.registers.control = self.registers.shift,
-                0xa000..=0xbfff => self.registers.chr0 = self.registers.shift,
-                0xc000..=0xdfff => self.registers.chr1 = self.registers.shift,
-                0xe000..=0xffff => self.registers.prg = self.registers.shift,
-                _ => panic!("not possible")
-              }
 
-              self.registers.shift = 0;
-              self.registers.current_shift_write = 0;
-              self.update_banks(address);
+              if self.registers.current_shift_write == 5 {
+                // write to the register designated in the address
+                match address {
+                  0x8000..=0x9fff => self.registers.control = self.registers.shift,
+                  0xa000..=0xbfff => self.registers.chr0 = self.registers.shift,
+                  0xc000..=0xdfff => self.registers.chr1 = self.registers.shift,
+                  0xe000..=0xffff => self.registers.prg = self.registers.shift,
+                  _ => panic!("not possible")
+                }
+
+                self.registers.shift = 0;
+                self.registers.current_shift_write = 0;
+                self.update_banks(address);
+              }
             }
           }
-
           None
         },
         _ => None

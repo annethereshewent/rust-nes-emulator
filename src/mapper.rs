@@ -16,7 +16,7 @@ pub trait MapperActions {
     None
   }
 
-  fn tick(&mut self, cycles: u8) {
+  fn tick(&mut self, _cycles: u8) {
 
   }
 }
@@ -30,7 +30,7 @@ impl MapperActions for Mapper {
     None
   }
 
-  fn tick(&mut self, cycles: u8) {
+  fn tick(&mut self, _cycles: u8) {
 
   }
 }
