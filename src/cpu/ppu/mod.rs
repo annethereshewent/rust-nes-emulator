@@ -310,7 +310,7 @@ impl PPU {
 
         let sprite_palettes = self.get_sprite_palette(palette_index);
 
-        let bank = self.ctrl.sprite_pattern_table_address();
+        let bank = if self.ctrl.sprite_size() == 8 { self.ctrl.sprite_pattern_table_address() } else { 0 };
 
         let tile_index = bank + tile_number as u16 * 16;
 
@@ -364,7 +364,7 @@ impl PPU {
       _ => todo!("mirroring mode not implemented")
     };
 
-    let chr_rom_bank = if self.ctrl.sprite_size() == 8 { self.ctrl.background_pattern_table_addr() } else { 0 };
+    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
     let y = self.current_scanline;
 
@@ -391,7 +391,15 @@ impl PPU {
             second_nametable_base
           }
         }
-        Mirroring::SingleScreenA | Mirroring::SingleScreenB => nametable_base,
+        Mirroring::SingleScreenA | Mirroring::SingleScreenB => {
+          if scrolled_y >= SCREEN_HEIGHT {
+            scrolled_y %= SCREEN_HEIGHT;
+          }
+          if scrolled_x >= SCREEN_WIDTH {
+            scrolled_x %= SCREEN_WIDTH;
+          }
+          nametable_base
+        },
         _ => todo!("four screen not implemented")
       };
 
