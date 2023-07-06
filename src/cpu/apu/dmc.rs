@@ -13,8 +13,8 @@ pub struct DMC {
   pub dma_pending: bool,
   pub sample_address: u16,
   sample_address_load: u16,
-  sample_length_load: u8,
-  sample_length: u8,
+  sample_length_load: u16,
+  sample_length: u16,
   frequency_counter: i16,
   output_silent: bool,
   output_bits: u8,
@@ -101,7 +101,7 @@ impl DMC {
       self.sample_length = 0;
     } else if self.sample_length == 0 {
       self.sample_address = self.sample_address_load;
-      self.sample_length = self.sample_length_load;
+      self.sample_length = self.sample_length_load as u16;
 
       self.init = if cycle % 2 == 0 { 2 } else { 3 };
     }
@@ -131,7 +131,7 @@ impl DMC {
 
       if self.sample_length == 0 {
         if self.flags_rate_register.loop_flag() {
-          self.sample_length = self.sample_length_load;
+          self.sample_length = self.sample_length_load as u16;
           self.sample_address = self.sample_address_load;
         } else if self.flags_rate_register.irq_enabled() {
           self.irq_pending = true;
@@ -154,6 +154,6 @@ impl DMC {
   }
 
   pub fn set_sample_length(&mut self, val: u8) {
-    self.sample_length_load = val * 16 + 1
+    self.sample_length_load = (val as u16) * 16 + 1
   }
 }

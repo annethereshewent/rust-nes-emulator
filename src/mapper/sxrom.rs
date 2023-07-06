@@ -203,7 +203,7 @@ impl MapperActions for Sxrom {
   fn mem_read(&mut self, address: u16) -> Option<usize> {
     match address {
       0x0000..=0x1fff => self.translate_address(address, BankType::Chr),
-      0x6000..=0x7fff if self.prg_ram_enabled() => Some(address as usize),
+      0x6000..=0x7fff if self.prg_ram_enabled() => Some((address - 0x6000) as usize),
       0x8000..=0xffff => self.translate_address(address, BankType::Prg),
       _ => panic!("not possible")
     }
@@ -218,7 +218,7 @@ impl MapperActions for Sxrom {
   fn mem_write(&mut self, address: u16, val: u8) -> Option<usize> {
       match address {
         0x0000..=0x1fff => self.translate_address(address, BankType::Chr),
-        0x6000..=0x7fff if self.prg_ram_enabled() => Some(address as usize),
+        0x6000..=0x7fff if self.prg_ram_enabled() => Some((address - 0x6000) as usize),
         0x8000..=0xffff => {
           if self.registers.write_occurred > 0 {
             return None;
