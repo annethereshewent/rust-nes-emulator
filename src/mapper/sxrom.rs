@@ -109,7 +109,6 @@ impl Sxrom {
       self.chr_banks[1] = self.get_bank_address(self.registers.chr1, self.chr_page_size-1, self.chr_shift);
     } else {
       let bank = self.registers.chr0 & 0b11110; // ignore lower bit of register in mode 0
-      // let new_address = ((bank_number & (self.chr_page_size -1)) as usize) << self.chr_shift;
       let new_address = self.get_bank_address(bank, self.chr_page_size-1, self.chr_shift);
 
       self.chr_banks[0] = new_address;

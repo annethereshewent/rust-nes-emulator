@@ -15,7 +15,7 @@ use self::registers::address::AddressRegister;
 use picture::Picture;
 
 use crate::cartridge::Mirroring;
-use crate::mapper::{Mapper, Empty};
+use crate::mapper::{Mapper, Empty, MapperActions};
 
 pub const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
@@ -28,8 +28,6 @@ pub const SCREEN_WIDTH: u16 = 256;
 const MAX_FPS: u32 = 60;
 pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
-
-// per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
 //   (84, 84, 84),
 //   (0, 30, 116 ),
@@ -254,11 +252,23 @@ impl PPU {
     !self.status.contains(StatusRegister::SPRITE_ZERO_HIT)
   }
 
-  fn read_chr(&self, address: u16) -> u8 {
-    if !self.chr_rom.is_empty() {
-      self.chr_rom[address as usize]
+  fn read_chr(&mut self, address: u16) -> u8 {
+
+    let chr = if !self.chr_rom.is_empty() {
+      &self.chr_rom
     } else {
-      self.chr_ram[address as usize]
+      &self.chr_ram
+    };
+
+    match &mut self.mapper {
+      Mapper::Empty(_) => chr[address as usize],
+      _ => {
+        if let Some(mapped_address) = self.mapper.mem_read(address) {
+          chr[mapped_address]
+        } else {
+          0
+        }
+      }
     }
   }
 
