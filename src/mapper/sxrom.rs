@@ -1,6 +1,6 @@
 use crate::cartridge::{Cartridge, Mirroring};
 
-use super::MapperActions;
+use super::{MapperActions, BankType};
 
 const PRG_RAM_SIZE: usize = 8192;
 const CHR_RAM_SIZE: usize = 8192;
@@ -8,11 +8,6 @@ const CHR_RAM_SIZE: usize = 8192;
 const CHR_BANK_SIZE: usize = 4096;
 const _PRG_RAM_BANK_SIZE: usize = 8192;
 const PRG_ROM_BANK_SIZE: usize = 16_384;
-
-enum BankType {
-  Chr,
-  Prg
-}
 
 struct SxromRegisters {
   write_occurred: i8,
@@ -25,7 +20,7 @@ struct SxromRegisters {
 }
 pub struct Sxrom {
   registers: SxromRegisters,
-  pub mirroring: Mirroring,
+  mirroring: Mirroring,
   chr_select: bool,
   prg_rom_banks: [usize; 2],
   chr_banks: [usize; 2],
@@ -197,6 +192,10 @@ impl Sxrom {
       }
       _ => panic!("not possible")
     }
+  }
+
+  pub fn mirroring(&self) -> Mirroring {
+    self.mirroring
   }
 }
 
