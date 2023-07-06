@@ -334,10 +334,10 @@ impl PPU {
   }
 
   fn sprite_zero_hit(&self, i: usize, x: usize) -> bool {
+    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) &&
     i == 0 &&
     x != 255 &&
-    self.mask.contains(MaskRegister::SHOW_SPRITES) &&
-    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT)
+    self.mask.contains(MaskRegister::SHOW_SPRITES)
   }
 
   fn read_chr(&mut self, address: u16) -> u8 {

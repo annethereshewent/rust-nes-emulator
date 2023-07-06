@@ -59,8 +59,10 @@ impl Cartridge {
     let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };
     let chr_rom_start = prg_rom_start + prg_len;
 
-    let chr_ram: Vec<u8> = Vec::new();
+    let mut chr_ram: Vec<u8> = Vec::new();
     let prg_ram: Vec<u8> = Vec::new();
+
+    chr_ram.resize(8192, 0);
 
     let mut cartridge = Cartridge {
       prg_rom: rom[prg_rom_start .. (prg_rom_start + prg_len)].to_vec(),
