@@ -4,9 +4,10 @@ const CHR_ROM_MULTIPLIER: usize = 8192;
 const NES_ASCII: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
 use crate::mapper::{Mapper, sxrom::Sxrom, Empty, uxrom::Uxrom};
+use strum_macros::Display;
 
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Display)]
 pub enum Mirroring {
   Horizontal,
   Vertical,

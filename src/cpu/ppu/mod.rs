@@ -114,6 +114,79 @@ const PALETTE_TABLE: [(u8, u8, u8); 64] = [
   (0x99, 0xFF, 0xFC), (0xDD, 0xDD, 0xDD), (0x11, 0x11, 0x11), (0x11, 0x11, 0x11)
 ];
 
+
+// http://www.romdetectives.com/Wiki/index.php?title=NES_Palette
+// const PALETTE_TABLE: [(u8, u8, u8); 64] = [
+//   (124,124,124),
+//   (0,0,252),
+//   (0,0,188),
+//   (68,40,188),
+//   (148,0,132),
+//   (168,0,32),
+//   (168,16,0),
+//   (136,20,0),
+//   (80,48,0),
+//   (0,120,0),
+//   (0,104,0),
+//   (0,88,0),
+//   (0,64,88),
+//   (0,0,0),
+//   (0,0,0),
+//   (0,0,0),
+
+//   (188,188,188),
+//   (0,120,248),
+//   (0,88,248),
+//   (104,68,252),
+//   (216,0,204),
+//   (228,0,88),
+//   (248,56,0),
+//   (228,92,16),
+//   (172,124,0),
+//   (0,184,0),
+//   (0,168,0),
+//   (0,168,68),
+//   (0,136,136),
+//   (0,0,0),
+//   (0,0,0),
+//   (0,0,0),
+
+//   (248,248,248),
+//   (60,188,252),
+//   (104,136,252),
+//   (152,120,248),
+//   (248,120,248),
+//   (248,88,152),
+//   (248,120,88),
+//   (252,160,68),
+//   (248,184,0),
+//   (184,248,24),
+//   (88,216,84),
+//   (88,248,152),
+//   (0,232,216),
+//   (120,120,120),
+//   (0,0,0),
+//   (0,0,0),
+
+//   (252,252,252),
+//   (164,228,252),
+//   (184,184,248),
+//   (216,184,248),
+//   (248,184,248),
+//   (248,164,192),
+//   (240,208,176),
+//   (252,224,168),
+//   (248,216,120),
+//   (216,248,120),
+//   (184,248,184),
+//   (184,248,216),
+//   (0,252,252),
+//   (248,216,248),
+
+//   (0,0,0),
+//   (0,0,0)
+// ];
+
 pub struct PPU {
   ctrl: ControlRegister,
   mask: MaskRegister,
@@ -290,7 +363,7 @@ impl PPU {
 
     for i in (0..self.oam_data.len()).step_by(4) {
       let tile_y = self.oam_data[i];
-      let tile_number = self.oam_data[i+1];
+      let mut tile_number = self.oam_data[i+1];
       let attributes = self.oam_data[i+2];
       let tile_x = self.oam_data[i+3];
 
@@ -310,12 +383,26 @@ impl PPU {
 
         let sprite_palettes = self.get_sprite_palette(palette_index);
 
-        let bank = if self.ctrl.sprite_size() == 8 { self.ctrl.sprite_pattern_table_address() } else { 0 };
+
+        let mut y_index = y_pos_in_tile;
+
+        let bank = if self.ctrl.sprite_size() == 8 {
+          self.ctrl.sprite_pattern_table_address()
+        } else {
+          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
+          tile_number = tile_number & 0b11111110;
+
+          if y_pos_in_tile > 7 {
+            y_index += 8;
+          }
+
+          bank
+        };
 
         let tile_index = bank + tile_number as u16 * 16;
 
-        let lower_byte = self.read_chr(tile_index + y_pos_in_tile as u16);
-        let upper_byte = self.read_chr(tile_index + y_pos_in_tile as u16 + 8);
+        let lower_byte = self.read_chr(tile_index + y_index as u16);
+        let upper_byte = self.read_chr(tile_index + y_index as u16 + 8);
 
         for x in 0..8 {
           let bit_pos = if x_flip {
