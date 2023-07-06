@@ -2,6 +2,8 @@ pub mod sxrom;
 
 use sxrom::Sxrom;
 
+use crate::cartridge::Mirroring;
+
 pub enum Mapper {
   Empty(Empty),
   Sxrom(Sxrom)
@@ -18,6 +20,10 @@ pub trait MapperActions {
 
   fn tick(&mut self, _cycles: u8) {
 
+  }
+
+  fn mirroring(&mut self) -> Mirroring {
+    Mirroring::SingleScreenA
   }
 }
 
@@ -40,6 +46,13 @@ impl MapperActions for Mapper {
     match self {
       Mapper::Empty(_) => (),
       Mapper::Sxrom(sxrom) => sxrom.tick(cycles)
+    }
+  }
+
+  fn mirroring(&mut self) -> Mirroring {
+    match self {
+      Mapper::Sxrom(sxrom) => sxrom.mirroring,
+      _ => panic!("mapper not supported")
     }
   }
 }

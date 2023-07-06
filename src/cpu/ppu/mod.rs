@@ -194,6 +194,12 @@ impl PPU {
     }
   }
 
+  pub fn update_mirroring(&mut self) {
+    if !matches!(self.mapper, Mapper::Empty(_)) {
+      self.mirroring = self.mapper.mirroring()
+    }
+  }
+
   pub fn cap_fps(&mut self) {
     let current_time = SystemTime::now()
       .duration_since(UNIX_EPOCH)
@@ -221,10 +227,17 @@ impl PPU {
     let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what nametable is being referred to
 
     match (&self.mirroring, name_table_index) {
-      (Mirroring::Horizontal, 1) => vram_index - 0x400, // first kb of memory
-      (Mirroring::Horizontal, 2) => vram_index - 0x400, // 2nd kb of memory
-      (Mirroring::Horizontal, 3) => vram_index - 0x800, // 2nd kb of memory
-      (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
+      (Mirroring::SingleScreenA, 3) => vram_index - 0xc00,
+      (Mirroring::SingleScreenB, 0) => vram_index + 0x400,
+      (Mirroring::Horizontal, 1)
+        | (Mirroring::Horizontal, 2)
+        | (Mirroring::SingleScreenA, 1)
+        | (Mirroring::SingleScreenB, 2) => vram_index - 0x400, // for horizontal, 1 is in first kb of memory, 2 is in 2nd kb of memory.
+      (Mirroring::Vertical, 2)
+        | (Mirroring::Vertical, 3)
+        | (Mirroring::Horizontal, 3)
+        | (Mirroring::SingleScreenB, 3)
+        | (Mirroring::SingleScreenA, 2) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd for vertical. 3 is in 2nd for horizontal.
       _ => vram_index // either it's four screen which has no mirroring or it's nametable 0 or another nametable that doesn't need the offset
     }
   }
@@ -346,7 +359,9 @@ impl PPU {
       (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
       (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
       (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
-      _ => todo!("not yet implemented")
+      (_, Mirroring::SingleScreenA) => 0x2000,
+      (_, Mirroring::SingleScreenB) => 0x2400,
+      _ => todo!("mirroring mode not implemented")
     };
 
     let chr_rom_bank = if self.ctrl.sprite_size() == 8 { self.ctrl.background_pattern_table_addr() } else { 0 };
@@ -373,8 +388,10 @@ impl PPU {
           scrolled_y %= SCREEN_HEIGHT;
           second_nametable_base
         }
+      } else if matches!(&self.mirroring, Mirroring::SingleScreenA) | matches!(&self.mirroring, Mirroring::SingleScreenB) {
+        nametable_base
       } else {
-        todo!("four screen not implemented");
+        todo!("four screen not implemented")
       };
 
       let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;

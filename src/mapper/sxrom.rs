@@ -25,7 +25,7 @@ struct SxromRegisters {
 }
 pub struct Sxrom {
   registers: SxromRegisters,
-  mirroring: Mirroring,
+  pub mirroring: Mirroring,
   chr_select: bool,
   prg_rom_banks: [usize; 2],
   chr_banks: [usize; 2],

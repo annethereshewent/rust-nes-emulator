@@ -165,6 +165,7 @@ impl CPU {
       }
       0x8000..=0xffff => {
         self.ppu.mapper.mem_write(address, value);
+        self.ppu.update_mirroring();
       }
       _ => self.ignore_write()
     };
@@ -221,6 +222,7 @@ impl CPU {
     self.ppu.chr_ram = cartridge.chr_ram;
     self.ppu.mirroring = cartridge.mirroring;
     self.ppu.mapper = cartridge.mapper;
+    self.ppu.update_mirroring();
 
     self.registers.pc = self.mem_read_u16(0xfffc);
   }
