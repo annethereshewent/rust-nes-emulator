@@ -28,6 +28,7 @@ pub const SCREEN_WIDTH: u16 = 256;
 const MAX_FPS: u32 = 60;
 pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
+// per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
 //   (84, 84, 84),
 //   (0, 30, 116 ),
@@ -98,6 +99,7 @@ pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 //   (0, 0, 0),
 // ];
 
+// per https://bugzmanov.github.io/nes_ebook/chapter_6_3.html
 const PALETTE_TABLE: [(u8, u8, u8); 64] = [
   (0x80, 0x80, 0x80), (0x00, 0x3D, 0xA6), (0x00, 0x12, 0xB0), (0x44, 0x00, 0x96), (0xA1, 0x00, 0x5E),
   (0xC7, 0x00, 0x28), (0xBA, 0x06, 0x00), (0x8C, 0x17, 0x00), (0x5C, 0x2F, 0x00), (0x10, 0x45, 0x00),
