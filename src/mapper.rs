@@ -1,15 +1,20 @@
 pub mod sxrom;
 pub mod uxrom;
+pub mod cnrom;
 
 use sxrom::Sxrom;
 use uxrom::Uxrom;
+use self::cnrom::Cnrom;
 
 use crate::cartridge::Mirroring;
+
+
 
 pub enum Mapper {
   Empty(Empty),
   Sxrom(Sxrom),
-  Uxrom(Uxrom)
+  Uxrom(Uxrom),
+  Cnrom(Cnrom)
 }
 
 pub enum BankType {
@@ -39,7 +44,8 @@ impl MapperActions for Mapper {
     match self {
       Mapper::Empty(_) => None,
       Mapper::Sxrom(sxrom) => sxrom.mem_read(address),
-      Mapper::Uxrom(uxrom) => uxrom.mem_read(address)
+      Mapper::Uxrom(uxrom) => uxrom.mem_read(address),
+      Mapper::Cnrom(cnrom) => cnrom.mem_read(address)
     }
   }
 
@@ -47,7 +53,8 @@ impl MapperActions for Mapper {
     match self {
       Mapper::Empty(_) => None,
       Mapper::Sxrom(sxrom) => sxrom.mem_write(address, val),
-      Mapper::Uxrom(uxrom) => uxrom.mem_write(address, val)
+      Mapper::Uxrom(uxrom) => uxrom.mem_write(address, val),
+      Mapper::Cnrom(cnrom) => cnrom.mem_write(address, val)
     }
   }
 
@@ -62,6 +69,7 @@ impl MapperActions for Mapper {
     match self {
       Mapper::Sxrom(sxrom) => sxrom.mirroring(),
       Mapper::Uxrom(uxrom) => uxrom.mirroring(),
+      Mapper::Cnrom(cnrom) => cnrom.mirroring(),
       _ => panic!("mapper not supported")
     }
   }

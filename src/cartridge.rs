@@ -3,7 +3,7 @@ const CHR_ROM_MULTIPLIER: usize = 8192;
 
 const NES_ASCII: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
-use crate::mapper::{Mapper, sxrom::Sxrom, Empty, uxrom::Uxrom};
+use crate::mapper::{Mapper, sxrom::Sxrom, Empty, uxrom::Uxrom, cnrom::Cnrom};
 use strum_macros::Display;
 
 
@@ -77,6 +77,7 @@ impl Cartridge {
       0 => Mapper::Empty(Empty {}),
       1 => Mapper::Sxrom(Sxrom::load(&mut cartridge)),
       2 => Mapper::Uxrom(Uxrom::load(&mut cartridge)),
+      3 => Mapper::Cnrom(Cnrom::load(&mut cartridge)),
       _ => panic!("unsupported mapper: {mapper_number}")
     };
 

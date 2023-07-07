@@ -95,7 +95,7 @@ impl CPU {
       0x8000 ..= 0xffff => {
 
         match &mut self.ppu.mapper {
-          Mapper::Empty(_) => {
+          Mapper::Empty(_) | Mapper::Cnrom(_) => {
             let prg_address = address - 0x8000;
 
             if self.prg_length == 0x4000 && prg_address >= 0x4000 {
@@ -124,7 +124,7 @@ impl CPU {
       0x0000 ..= 0x1fff => self.memory[(address & 0b11111111111) as usize] = value,
       0x2000 => self.ppu.write_to_control(value),
       0x2001 => self.ppu.write_to_mask(value),
-      0x2002 => panic!("attempting to write to read only ppu register"),
+      0x2002 => println!("attempting to write to read only ppu register"),
       0x2003 => self.ppu.write_to_oam_address(value),
       0x2004 => self.ppu.write_to_oam_data(value),
       0x2005 => self.ppu.write_to_scroll(value),
