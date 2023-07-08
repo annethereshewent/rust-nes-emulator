@@ -58,6 +58,7 @@ impl Txrom {
       }
     };
 
+    txrom.prg_rom_banks[2] = txrom.get_bank_address(txrom.prg_page_size-2, txrom.prg_page_size, PRG_ROM_BANK_SIZE);
     txrom.prg_rom_banks[3] = txrom.get_bank_address(txrom.prg_page_size -1, txrom.prg_page_size, PRG_ROM_BANK_SIZE);
 
     txrom

@@ -25,8 +25,6 @@ pub struct Cartridge {
   pub mapper: Mapper
 }
 
-
-
 impl Cartridge {
   pub fn new(rom: Vec<u8>) -> Self {
     let prg_len: usize = rom[4] as usize * PRG_ROM_MULTIPLIER;
