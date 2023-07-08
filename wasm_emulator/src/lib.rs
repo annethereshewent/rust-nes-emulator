@@ -130,7 +130,7 @@ impl WasmEmulator {
   }
 
   pub fn load(&mut self, rom: &[u8]) {
-    let cartridge = Cartridge::new(rom.to_vec(), "".to_string());
+    let cartridge = Cartridge::new(rom.to_vec(), None);
     self.cpu.load_game(cartridge);
   }
 

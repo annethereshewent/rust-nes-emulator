@@ -57,7 +57,7 @@ fn main() {
   let bytes: Vec<u8> = fs::read(filepath).unwrap();
   let mut cpu = CPU::new();
 
-  cpu.load_game(Cartridge::new(bytes, filepath.to_string()));
+  cpu.load_game(Cartridge::new(bytes, Some(filepath.to_string())));
 
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();

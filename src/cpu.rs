@@ -21,7 +21,7 @@ pub struct CPU {
   pub prg_save: bool,
   cycles: u16,
   total_cycles: u64,
-  file_path: String,
+  file_path: Option<String>,
   memory: [u8; 0x800],
   prg_rom: Vec<u8>,
 }
@@ -73,22 +73,24 @@ impl CPU {
       apu: APU::new(),
       cycles: 0,
       total_cycles: 0,
-      file_path: "".to_string(),
+      file_path: None,
       prg_save: false
     }
   }
 
   pub fn save_game(&mut self) {
-    if self.prg_ram.len() > 0 && self.prg_save && self.file_path != "" {
-      let mut file = fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .open(&self.file_path)
-        .unwrap();
+    if let Some(file_path) = &self.file_path {
+      if self.prg_ram.len() > 0 && self.prg_save {
+        let mut file = fs::OpenOptions::new()
+          .create(true)
+          .write(true)
+          .open(file_path)
+          .unwrap();
 
-      let _ = file.write_all(&self.prg_ram);
+        let _ = file.write_all(&self.prg_ram);
 
-      self.prg_save = false;
+        self.prg_save = false;
+      }
     }
   }
 
@@ -248,8 +250,8 @@ impl CPU {
     self.ppu.mapper = cartridge.mapper;
     self.ppu.update_mirroring();
 
-    if cartridge.path != "" {
-      self.file_path = cartridge.path.replace(".nes", ".sav");
+    if let Some(file_path) = cartridge.path {
+      self.file_path = Some(file_path.replace(".nes", ".sav"));
     }
 
     if prg_ram_length > 0 {
@@ -260,8 +262,10 @@ impl CPU {
   }
 
   pub fn load_ram(&mut self) {
-    if self.file_path != "" && Path::new(&self.file_path).exists() {
-      self.prg_ram = fs::read(&self.file_path).unwrap();
+    if let Some(file_path) = &self.file_path {
+      if Path::new(file_path).exists() {
+        self.prg_ram = fs::read(file_path).unwrap();
+      }
     }
   }
 
