@@ -513,7 +513,6 @@ impl PPU {
 
       let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
 
-
       self.background_pixels_drawn.push(color_index != 0);
 
       // finally render the pixel!
