@@ -3,17 +3,29 @@ const CHR_ROM_MULTIPLIER: usize = 8192;
 
 const NES_ASCII: [u8; 4] = [0x4E, 0x45, 0x53, 0x1A];
 
+use crate::mapper::{Mapper, sxrom::Sxrom, Empty, uxrom::Uxrom, cnrom::Cnrom, txrom::Txrom};
+use strum_macros::Display;
+
+
+#[derive(Copy, Clone, Display)]
 pub enum Mirroring {
   Horizontal,
   Vertical,
-  FourScreen
+  SingleScreenA,
+  SingleScreenB,
+  FourScreen,
 }
 
 pub struct Cartridge {
   pub prg_rom: Vec<u8>,
+  pub prg_ram: Vec<u8>,
   pub chr_rom: Vec<u8>,
-  pub mirroring: Mirroring
+  pub chr_ram: Vec<u8>,
+  pub mirroring: Mirroring,
+  pub mapper: Mapper
 }
+
+
 
 impl Cartridge {
   pub fn new(rom: Vec<u8>) -> Self {
@@ -31,9 +43,6 @@ impl Cartridge {
 
     let mapper_number = ((rom[7] >> 4) & 0b1111) << 4 | (rom[6] >> 4 & 0b1111);
 
-    if mapper_number != 0 {
-      panic!("mapper not supported");
-    }
     let four_screen: bool = rom[6] & 0b1000 != 0;
     let vertical_mirroring = rom[6] & 0b1 != 0;
 
@@ -50,10 +59,29 @@ impl Cartridge {
     let prg_rom_start = 16 + if skip_trainer { 512 } else { 0 };
     let chr_rom_start = prg_rom_start + prg_len;
 
-    Cartridge {
+    let mut chr_ram: Vec<u8> = Vec::new();
+    let prg_ram: Vec<u8> = Vec::new();
+
+    chr_ram.resize(8192, 0);
+
+    let mut cartridge = Cartridge {
       prg_rom: rom[prg_rom_start .. (prg_rom_start + prg_len)].to_vec(),
       chr_rom: rom[chr_rom_start .. (chr_rom_start + chr_len)].to_vec(),
-      mirroring: screen_mirroring
-    }
+      mirroring: screen_mirroring,
+      chr_ram,
+      prg_ram,
+      mapper: Mapper::Empty(Empty {})
+    };
+
+    cartridge.mapper = match mapper_number {
+      0 => Mapper::Empty(Empty {}),
+      1 => Mapper::Sxrom(Sxrom::load(&mut cartridge)),
+      2 => Mapper::Uxrom(Uxrom::load(&mut cartridge)),
+      3 => Mapper::Cnrom(Cnrom::load(&mut cartridge)),
+      4 => Mapper::Txrom(Txrom::load(&mut cartridge)),
+      _ => panic!("unsupported mapper: {mapper_number}")
+    };
+
+    cartridge
   }
 }

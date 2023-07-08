@@ -15,6 +15,7 @@ use self::registers::address::AddressRegister;
 use picture::Picture;
 
 use crate::cartridge::Mirroring;
+use crate::mapper::{Mapper, Empty, MapperActions};
 
 pub const SCANLINES_PER_FRAME: u16 = 262;
 const CYCLES_PER_SCANLINE: u16 = 341;
@@ -26,7 +27,6 @@ pub const SCREEN_WIDTH: u16 = 256;
 
 const MAX_FPS: u32 = 60;
 pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
-
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
@@ -99,6 +99,7 @@ pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 //   (0, 0, 0),
 // ];
 
+// per https://bugzmanov.github.io/nes_ebook/chapter_6_3.html
 const PALETTE_TABLE: [(u8, u8, u8); 64] = [
   (0x80, 0x80, 0x80), (0x00, 0x3D, 0xA6), (0x00, 0x12, 0xB0), (0x44, 0x00, 0x96), (0xA1, 0x00, 0x5E),
   (0xC7, 0x00, 0x28), (0xBA, 0x06, 0x00), (0x8C, 0x17, 0x00), (0x5C, 0x2F, 0x00), (0x10, 0x45, 0x00),
@@ -115,6 +116,79 @@ const PALETTE_TABLE: [(u8, u8, u8); 64] = [
   (0x99, 0xFF, 0xFC), (0xDD, 0xDD, 0xDD), (0x11, 0x11, 0x11), (0x11, 0x11, 0x11)
 ];
 
+
+// http://www.romdetectives.com/Wiki/index.php?title=NES_Palette
+// const PALETTE_TABLE: [(u8, u8, u8); 64] = [
+//   (124,124,124),
+//   (0,0,252),
+//   (0,0,188),
+//   (68,40,188),
+//   (148,0,132),
+//   (168,0,32),
+//   (168,16,0),
+//   (136,20,0),
+//   (80,48,0),
+//   (0,120,0),
+//   (0,104,0),
+//   (0,88,0),
+//   (0,64,88),
+//   (0,0,0),
+//   (0,0,0),
+//   (0,0,0),
+
+//   (188,188,188),
+//   (0,120,248),
+//   (0,88,248),
+//   (104,68,252),
+//   (216,0,204),
+//   (228,0,88),
+//   (248,56,0),
+//   (228,92,16),
+//   (172,124,0),
+//   (0,184,0),
+//   (0,168,0),
+//   (0,168,68),
+//   (0,136,136),
+//   (0,0,0),
+//   (0,0,0),
+//   (0,0,0),
+
+//   (248,248,248),
+//   (60,188,252),
+//   (104,136,252),
+//   (152,120,248),
+//   (248,120,248),
+//   (248,88,152),
+//   (248,120,88),
+//   (252,160,68),
+//   (248,184,0),
+//   (184,248,24),
+//   (88,216,84),
+//   (88,248,152),
+//   (0,232,216),
+//   (120,120,120),
+//   (0,0,0),
+//   (0,0,0),
+
+//   (252,252,252),
+//   (164,228,252),
+//   (184,184,248),
+//   (216,184,248),
+//   (248,184,248),
+//   (248,164,192),
+//   (240,208,176),
+//   (252,224,168),
+//   (248,216,120),
+//   (216,248,120),
+//   (184,248,184),
+//   (184,248,216),
+//   (0,252,252),
+//   (248,216,248),
+
+//   (0,0,0),
+//   (0,0,0)
+// ];
+
 pub struct PPU {
   ctrl: ControlRegister,
   mask: MaskRegister,
@@ -123,6 +197,7 @@ pub struct PPU {
   ppu_addr: AddressRegister,
   pub palette_table: [u8; 32],
   pub chr_rom: Vec<u8>,
+  pub chr_ram: Vec<u8>,
   pub vram: [u8; 2048],
   pub oam_data: [u8; 256],
   pub oam_address: u8,
@@ -135,10 +210,11 @@ pub struct PPU {
   pub joypad: Joypad,
   background_pixels_drawn: Vec<bool>,
   previous_time: u128,
+  pub mapper: Mapper
 }
 
 impl PPU {
-  pub fn new(chr_rom: Vec<u8>, mirroring: Mirroring) -> Self {
+  pub fn new(chr_rom: Vec<u8>, chr_ram: Vec<u8>, mirroring: Mirroring) -> Self {
     PPU {
       ctrl: ControlRegister::from_bits_truncate(0b00000000),
       mask: MaskRegister::from_bits_truncate(0b00000000),
@@ -146,6 +222,7 @@ impl PPU {
       status: StatusRegister::from_bits_truncate(0b00000000),
       ppu_addr: AddressRegister::new(),
       chr_rom,
+      chr_ram,
       oam_data: [0; 256],
       oam_address: 0,
       vram: [0; 2048],
@@ -158,7 +235,8 @@ impl PPU {
       picture: Picture::new(),
       joypad: Joypad::new(),
       background_pixels_drawn: Vec::new(),
-      previous_time: 0
+      previous_time: 0,
+      mapper: Mapper::Empty(Empty {})
     }
   }
 
@@ -191,6 +269,12 @@ impl PPU {
     }
   }
 
+  pub fn update_mirroring(&mut self) {
+    if !matches!(self.mapper, Mapper::Empty(_)) {
+      self.mirroring = self.mapper.mirroring()
+    }
+  }
+
   pub fn cap_fps(&mut self) {
     let current_time = SystemTime::now()
       .duration_since(UNIX_EPOCH)
@@ -218,10 +302,17 @@ impl PPU {
     let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what nametable is being referred to
 
     match (&self.mirroring, name_table_index) {
-      (Mirroring::Horizontal, 1) => vram_index - 0x400, // first kb of memory
-      (Mirroring::Horizontal, 2) => vram_index - 0x400, // 2nd kb of memory
-      (Mirroring::Horizontal, 3) => vram_index - 0x800, // 2nd kb of memory
-      (Mirroring::Vertical, 2) | (Mirroring::Vertical, 3) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd (ie: if vram index is 0xc00 [index 2], subtracting 0x800 would put it at 0x400, start of 2nd kb of ram)
+      (Mirroring::SingleScreenA, 3) => vram_index - 0xc00,
+      (Mirroring::SingleScreenB, 0) => vram_index + 0x400,
+      (Mirroring::Horizontal, 1)
+        | (Mirroring::Horizontal, 2)
+        | (Mirroring::SingleScreenA, 1)
+        | (Mirroring::SingleScreenB, 2) => vram_index - 0x400, // for horizontal, 1 is in first kb of memory, 2 is in 2nd kb of memory.
+      (Mirroring::Vertical, 2)
+        | (Mirroring::Vertical, 3)
+        | (Mirroring::Horizontal, 3)
+        | (Mirroring::SingleScreenB, 3)
+        | (Mirroring::SingleScreenA, 2) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd for vertical. 3 is in 2nd for horizontal.
       _ => vram_index // either it's four screen which has no mirroring or it's nametable 0 or another nametable that doesn't need the offset
     }
   }
@@ -243,10 +334,30 @@ impl PPU {
   }
 
   fn sprite_zero_hit(&self, i: usize, x: usize) -> bool {
+    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) &&
     i == 0 &&
     x != 255 &&
-    self.mask.contains(MaskRegister::SHOW_SPRITES) &&
-    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT)
+    self.mask.contains(MaskRegister::SHOW_SPRITES)
+  }
+
+  fn read_chr(&mut self, address: u16) -> u8 {
+
+    let chr = if !self.chr_rom.is_empty() {
+      &self.chr_rom
+    } else {
+      &self.chr_ram
+    };
+
+    match &mut self.mapper {
+      Mapper::Empty(_) => chr[address as usize],
+      _ => {
+        if let Some(mapped_address) = self.mapper.mem_read(address) {
+          chr[mapped_address]
+        } else {
+          0
+        }
+      }
+    }
   }
 
   fn draw_sprites(&mut self) {
@@ -254,7 +365,7 @@ impl PPU {
 
     for i in (0..self.oam_data.len()).step_by(4) {
       let tile_y = self.oam_data[i];
-      let tile_number = self.oam_data[i+1];
+      let mut tile_number = self.oam_data[i+1];
       let attributes = self.oam_data[i+2];
       let tile_x = self.oam_data[i+3];
 
@@ -274,12 +385,26 @@ impl PPU {
 
         let sprite_palettes = self.get_sprite_palette(palette_index);
 
-        let bank = self.ctrl.sprite_pattern_table_address();
+
+        let mut y_index = y_pos_in_tile;
+
+        let bank = if self.ctrl.sprite_size() == 8 {
+          self.ctrl.sprite_pattern_table_address()
+        } else {
+          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
+          tile_number = tile_number & 0b11111110;
+
+          if y_pos_in_tile > 7 {
+            y_index += 8;
+          }
+
+          bank
+        };
 
         let tile_index = bank + tile_number as u16 * 16;
 
-        let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16) as usize];
-        let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile as u16 + 8) as usize];
+        let lower_byte = self.read_chr(tile_index + y_index as u16);
+        let upper_byte = self.read_chr(tile_index + y_index as u16 + 8);
 
         for x in 0..8 {
           let bit_pos = if x_flip {
@@ -323,10 +448,12 @@ impl PPU {
       (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
       (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
       (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
-      _ => todo!("not yet implemented")
+      (_, Mirroring::SingleScreenA) => 0x2000,
+      (_, Mirroring::SingleScreenB) => 0x2400,
+      _ => todo!("mirroring mode not implemented")
     };
 
-    let chr_rom_bank = if self.ctrl.sprite_size() == 8 { self.ctrl.background_pattern_table_addr() } else { 0 };
+    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
     let y = self.current_scanline;
 
@@ -336,22 +463,33 @@ impl PPU {
       let mut scrolled_x = x + self.scroll.x as u16;
       let mut scrolled_y = self.scroll.y as u16 + y;
 
-      let current_nametable = if matches!(&self.mirroring, Mirroring::Vertical) {
-        if scrolled_x < SCREEN_WIDTH {
-          nametable_base
-        } else {
-          scrolled_x %= SCREEN_WIDTH;
-          second_nametable_base
+      let current_nametable = match &self.mirroring {
+        Mirroring::Vertical => {
+          if scrolled_x < SCREEN_WIDTH {
+            nametable_base
+          } else {
+            scrolled_x %= SCREEN_WIDTH;
+            second_nametable_base
+          }
         }
-      } else if matches!(&self.mirroring, Mirroring::Horizontal) {
-        if scrolled_y < SCREEN_HEIGHT {
-          nametable_base
-        } else {
-          scrolled_y %= SCREEN_HEIGHT;
-          second_nametable_base
+        Mirroring::Horizontal => {
+          if scrolled_y < SCREEN_HEIGHT {
+            nametable_base
+          } else {
+            scrolled_y %= SCREEN_HEIGHT;
+            second_nametable_base
+          }
         }
-      } else {
-        todo!("four screen not implemented");
+        Mirroring::SingleScreenA | Mirroring::SingleScreenB => {
+          if scrolled_y >= SCREEN_HEIGHT {
+            scrolled_y %= SCREEN_HEIGHT;
+          }
+          if scrolled_x >= SCREEN_WIDTH {
+            scrolled_x %= SCREEN_WIDTH;
+          }
+          nametable_base
+        },
+        _ => todo!("four screen not implemented")
       };
 
       let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
@@ -363,8 +501,8 @@ impl PPU {
       let x_pos_in_tile = scrolled_x % 8;
       let y_pos_in_tile = scrolled_y % 8;
 
-      let lower_byte = self.chr_rom[(tile_index + y_pos_in_tile) as usize];
-      let upper_byte = self.chr_rom[(tile_index + y_pos_in_tile + 8) as usize];
+      let lower_byte = self.read_chr(tile_index + y_pos_in_tile);
+      let upper_byte = self.read_chr(tile_index + y_pos_in_tile + 8);
 
       let bit_pos = 7 - x_pos_in_tile;
 
@@ -427,50 +565,6 @@ impl PPU {
     [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
   }
 
-  // fn render(&mut self) {
-  //   let creator = self.canvas.texture_creator();
-  //   let mut texture = creator
-  //       .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
-  //       .unwrap();
-
-  //   texture.update(None, &self.picture.data, 256 * 3).unwrap();
-
-  //   self.canvas.copy(&texture, None, None).unwrap();
-
-  //   self.canvas.present();
-
-  //   for event in self.event_pump.poll_iter() {
-  //     match event {
-  //       Event::Quit { .. }
-  //       | Event::KeyDown {
-  //           keycode: Some(Keycode::Escape),
-  //           ..
-  //       } => std::process::exit(0),
-  //       Event::KeyDown { keycode, .. }=> {
-  //         if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
-  //           self.joypad.set_button(*button, true);
-  //         }
-  //       }
-  //       Event::KeyUp { keycode, .. } => {
-  //         if let Some(button) = self.key_map.get(&keycode.unwrap_or(Keycode::Return)){
-  //           self.joypad.set_button(*button, false);
-  //         }
-  //       }
-  //       Event::JoyButtonDown { button_idx, .. } => {
-  //         if let Some(button) = self.joypad_map.get(&button_idx){
-  //           self.joypad.set_button(*button, true);
-  //         }
-  //       }
-  //       Event::JoyButtonUp { button_idx, .. } => {
-  //         if let Some(button) = self.joypad_map.get(&button_idx){
-  //           self.joypad.set_button(*button, false);
-  //         }
-  //       }
-  //       _ => { /* do nothing */ }
-  //     }
-  //   }
-  // }
-
   pub fn read_oam_data(&self) -> u8 {
     self.oam_data[self.oam_address as usize]
   }
@@ -509,15 +603,21 @@ impl PPU {
     let address = self.ppu_addr.get();
 
     match address {
-      0x0000 ..= 0x1fff => println!("attempting to write to chr rom, {:X}", address),
+      0x0000 ..= 0x1fff => {
+        if !self.chr_ram.is_empty() {
+          self.chr_ram[address as usize] = value;
+        }
+      },
       0x2000 ..=0x2fff => self.vram[self.mirror_vram_index(address) as usize] = value,
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
-        self.palette_table[(address_mirror - 0x3f00) as usize] = value;
+        self.palette_table[((address_mirror - 0x3f00) % self.palette_table.len() as u16) as usize] = value;
       }
-      0x3f00 ..=0x3fff => self.palette_table[(address - 0x3f00) as usize] = value,
+      0x3f00 ..=0x3fff => self.palette_table[((address - 0x3f00) % self.palette_table.len() as u16) as usize] = value,
       _ => panic!("shouldn't get here")
     }
+
+    self.mapper.ppu_bus_write(address, value);
 
     self.ppu_addr.increment(self.ctrl.vram_address_increment());
   }
@@ -531,7 +631,7 @@ impl PPU {
       0x0000 ..= 0x1fff => {
         let result = self.internal_data;
 
-        self.internal_data = self.chr_rom[address as usize];
+        self.internal_data = self.read_chr(address);
 
         result
       },
@@ -544,12 +644,17 @@ impl PPU {
       }
       0x3f10 | 0x3f14 | 0x3f18 | 0x3f1c => {
         let address_mirror = address - 0x10;
-        self.palette_table[(address_mirror - 0x3f00) as usize]
+
+        self.internal_data = self.vram[self.mirror_vram_index(address - 0x1000) as usize];
+
+        self.palette_table[((address_mirror - 0x3f00) % self.palette_table.len() as u16) as usize]
       }
 
       0x3f00..=0x3fff =>
       {
-        self.palette_table[(address - 0x3f00) as usize]
+        self.internal_data = self.vram[self.mirror_vram_index(address - 0x1000) as usize];
+
+        self.palette_table[((address - 0x3f00) % self.palette_table.len() as u16) as usize]
       }
       _ => panic!("shouldn't get here")
     }
