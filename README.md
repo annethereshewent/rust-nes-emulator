@@ -4,9 +4,9 @@ This is yet another NES emulator written in Rust. I wanted to get more experienc
 
 **Update**
 
-Now supports NES mappers 1-4, this expands the list of compatible games (though with some graphical glitches in some of them) greatly.
+Now supports NES mappers 1-4, this expands the list of compatible games greatly. (though with some graphical glitches in some of them)
 
-Graphics and audio are implemented!
+Audio is fully implemented!
 
 ## Running the emulator
 
@@ -22,6 +22,31 @@ To compile the desktop app, run `cargo build --release`. Then, with the executab
 ## Web app
 
 Web app is now available at https://annethereshewent.github.io/
+
+## Controls
+
+Supports both keyboard and gamepad on both the desktop app and web app.
+
+### Keyboard controls
+
+* **Up**: W
+* **Down**: S
+* **Left**: A
+* **Right**: D
+* **A**: K
+* **B** J
+* **Select**: Tab
+* **Start**: Enter
+
+### Gamepad controls
+
+On a PS5 controller: (Xbox controller may differ)
+
+* **Up, down, left right**: Direction buttons
+* **A**: X
+* **B**: Square
+* **Select**: Share
+* **Start**: Start
 
 ## Screenshots
 
