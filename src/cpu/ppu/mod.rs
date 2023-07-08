@@ -10,7 +10,6 @@ use registers::mask::MaskRegister;
 use registers::scroll::ScrollRegister;
 use registers::status::StatusRegister;
 use self::joypad::Joypad;
-use self::registers::address::AddressRegister;
 
 use picture::Picture;
 
@@ -194,7 +193,6 @@ pub struct PPU {
   mask: MaskRegister,
   scroll: ScrollRegister,
   status: StatusRegister,
-  ppu_addr: AddressRegister,
   pub palette_table: [u8; 32],
   pub chr_rom: Vec<u8>,
   pub chr_ram: Vec<u8>,
@@ -220,7 +218,6 @@ impl PPU {
       mask: MaskRegister::from_bits_truncate(0b00000000),
       scroll: ScrollRegister::new(),
       status: StatusRegister::from_bits_truncate(0b00000000),
-      ppu_addr: AddressRegister::new(),
       chr_rom,
       chr_ram,
       oam_data: [0; 256],
@@ -321,7 +318,6 @@ impl PPU {
     let data = self.status.bits();
 
     self.scroll.latch = false;
-    self.ppu_addr.latch = false;
     self.status.set(StatusRegister::VBLANK_STARTED, false);
 
     data
@@ -329,8 +325,8 @@ impl PPU {
 
   fn draw_line(&mut self) {
     self.background_pixels_drawn = Vec::new();
-    self.draw_background();
-    self.draw_sprites();
+    // self.draw_background();
+    // self.draw_sprites();
   }
 
   fn sprite_zero_hit(&self, i: usize, x: usize) -> bool {
@@ -441,86 +437,86 @@ impl PPU {
     }
   }
 
-  fn draw_background(&mut self) {
-    let nametable_base = self.ctrl.base_table_address();
+  // fn draw_background(&mut self) {
+  //   let nametable_base = self.ctrl.base_table_address();
 
-    let second_nametable_base = match (nametable_base, &self.mirroring) {
-      (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
-      (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
-      (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
-      (_, Mirroring::SingleScreenA) => 0x2000,
-      (_, Mirroring::SingleScreenB) => 0x2400,
-      _ => todo!("mirroring mode not implemented")
-    };
+  //   let second_nametable_base = match (nametable_base, &self.mirroring) {
+  //     (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
+  //     (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
+  //     (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
+  //     (_, Mirroring::SingleScreenA) => 0x2000,
+  //     (_, Mirroring::SingleScreenB) => 0x2400,
+  //     _ => todo!("mirroring mode not implemented")
+  //   };
 
-    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
+  //   let chr_rom_bank = self.ctrl.background_pattern_table_addr();
 
-    let y = self.current_scanline;
+  //   let y = self.current_scanline;
 
-    // let mut scrolled_y = y;
+  //   // let mut scrolled_y = y;
 
-    for x in 0..SCREEN_WIDTH {
-      let mut scrolled_x = x + self.scroll.x as u16;
-      let mut scrolled_y = self.scroll.y as u16 + y;
+  //   for x in 0..SCREEN_WIDTH {
+  //     let mut scrolled_x = x + self.scroll.x as u16;
+  //     let mut scrolled_y = self.scroll.y as u16 + y;
 
-      let current_nametable = match &self.mirroring {
-        Mirroring::Vertical => {
-          if scrolled_x < SCREEN_WIDTH {
-            nametable_base
-          } else {
-            scrolled_x %= SCREEN_WIDTH;
-            second_nametable_base
-          }
-        }
-        Mirroring::Horizontal => {
-          if scrolled_y < SCREEN_HEIGHT {
-            nametable_base
-          } else {
-            scrolled_y %= SCREEN_HEIGHT;
-            second_nametable_base
-          }
-        }
-        Mirroring::SingleScreenA | Mirroring::SingleScreenB => {
-          if scrolled_y >= SCREEN_HEIGHT {
-            scrolled_y %= SCREEN_HEIGHT;
-          }
-          if scrolled_x >= SCREEN_WIDTH {
-            scrolled_x %= SCREEN_WIDTH;
-          }
-          nametable_base
-        },
-        _ => todo!("four screen not implemented")
-      };
+  //     let current_nametable = match &self.mirroring {
+  //       Mirroring::Vertical => {
+  //         if scrolled_x < SCREEN_WIDTH {
+  //           nametable_base
+  //         } else {
+  //           scrolled_x %= SCREEN_WIDTH;
+  //           second_nametable_base
+  //         }
+  //       }
+  //       Mirroring::Horizontal => {
+  //         if scrolled_y < SCREEN_HEIGHT {
+  //           nametable_base
+  //         } else {
+  //           scrolled_y %= SCREEN_HEIGHT;
+  //           second_nametable_base
+  //         }
+  //       }
+  //       Mirroring::SingleScreenA | Mirroring::SingleScreenB => {
+  //         if scrolled_y >= SCREEN_HEIGHT {
+  //           scrolled_y %= SCREEN_HEIGHT;
+  //         }
+  //         if scrolled_x >= SCREEN_WIDTH {
+  //           scrolled_x %= SCREEN_WIDTH;
+  //         }
+  //         nametable_base
+  //       },
+  //       _ => todo!("four screen not implemented")
+  //     };
 
-      let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
+  //     let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
 
-      let tile_number = self.vram[self.mirror_vram_index(current_nametable + tile_pos) as usize];
+  //     let tile_number = self.vram[self.mirror_vram_index(current_nametable + tile_pos) as usize];
 
-      let tile_index = chr_rom_bank + (tile_number as u16 * 16);
+  //     let tile_index = chr_rom_bank + (tile_number as u16 * 16);
 
-      let x_pos_in_tile = scrolled_x % 8;
-      let y_pos_in_tile = scrolled_y % 8;
+  //     let x_pos_in_tile = scrolled_x % 8;
+  //     let y_pos_in_tile = scrolled_y % 8;
 
-      let lower_byte = self.read_chr(tile_index + y_pos_in_tile);
-      let upper_byte = self.read_chr(tile_index + y_pos_in_tile + 8);
+  //     let lower_byte = self.read_chr(tile_index + y_pos_in_tile);
+  //     let upper_byte = self.read_chr(tile_index + y_pos_in_tile + 8);
 
-      let bit_pos = 7 - x_pos_in_tile;
+  //     let bit_pos = 7 - x_pos_in_tile;
 
-      let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
+  //     let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
 
-      let tile_column = scrolled_x / 8;
-      let tile_row = scrolled_y / 8;
+  //     let tile_column = scrolled_x / 8;
+  //     let tile_row = scrolled_y / 8;
 
-      let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
+  //     let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
 
-      self.background_pixels_drawn.push(color_index != 0);
+  //     self.background_pixels_drawn.push(color_index != 0);
 
-      // finally render the pixel!
-      let rgb = PALETTE_TABLE[bg_palette[color_index as usize] as usize];
-      self.picture.set_pixel(x as usize, y as usize, rgb);
+  //     // finally render the pixel!
+  //     let rgb = PALETTE_TABLE[bg_palette[color_index as usize] as usize];
+  //     self.picture.set_pixel(x as usize, y as usize, rgb);
 
-    }
-  }
+  //   }
+  // }
 
   fn get_sprite_palette(&self, palette_index: u8) -> [u8; 4] {
     // there are 0x11 (or 17) indexes for the background palettes
@@ -591,15 +587,15 @@ impl PPU {
   }
 
   pub fn write_to_scroll(&mut self, value: u8) {
-    self.scroll.set(value);
+    self.scroll.set_scroll(value);
   }
 
   pub fn write_to_ppu_address(&mut self, value: u8) {
-    self.ppu_addr.update(value);
+    self.scroll.set_address(value);
   }
 
   pub fn write_to_data(&mut self, value: u8) {
-    let address = self.ppu_addr.get();
+    let address = self.scroll.get_address();
 
     match address {
       0x0000 ..= 0x1fff => {
@@ -618,13 +614,26 @@ impl PPU {
 
     self.mapper.ppu_bus_write(address, value);
 
-    self.ppu_addr.increment(self.ctrl.vram_address_increment());
+    self.increment_address(self.ctrl.vram_address_increment());
+  }
+
+  fn increment_address(&mut self, val: u8) {
+    if self.rendering_enabled() {
+      self.scroll.increment_x();
+      self.scroll.increment_y();
+    } else {
+      self.scroll.increment_address(val);
+    }
+  }
+
+  fn rendering_enabled(&self) -> bool {
+    self.mask.contains(MaskRegister::SHOW_SPRITES) || self.mask.contains(MaskRegister::SHOW_BACKGROUND)
   }
 
   pub fn read_data(&mut self) -> u8 {
-    let address = self.ppu_addr.get();
+    let address = self.scroll.get_address();
 
-    self.ppu_addr.increment(self.ctrl.vram_address_increment());
+    self.increment_address(self.ctrl.vram_address_increment());
 
     match address {
       0x0000 ..= 0x1fff => {
