@@ -1,8 +1,14 @@
 # Rust NES Emulator
 
-This is yet another NES emulator written in Rust. I wanted to get more experience doing low level programming, and I decided that this would be a fun way to learn a new programming language. Still a work in progress, but it plays many of the first generation NES games released, such as Super Mario Bros, Pac-man, Donkey Kong, Ice Climber, Excite Bike, and others.
+This is yet another NES emulator written in Rust. I wanted to get more experience doing low level programming, and I decided that this would be a fun way to learn a new programming language.
 
-Graphics and audio are implemented! 
+**Update**
+
+Now supports NES mappers 1-4, this expands the list of compatible games (though with some graphical glitches in some of them) greatly.
+
+Graphics and audio are implemented!
+
+## Running the emulator
 
 There are two ways of running the emulator:
 
@@ -25,3 +31,11 @@ Web app is now available at https://annethereshewent.github.io/
 <img width="256" alt="Screenshot 2023-07-01 at 2 13 07 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/44179c60-a05e-4545-94d9-9cf313d16657">
 <img width="256" alt="Screenshot 2023-07-01 at 2 12 22 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/41c24695-ced1-4b23-800d-bb39ce8ac026">
 <img width="256" alt="Screenshot 2023-07-01 at 2 18 51 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/066f4b77-abcb-4623-bf2b-7239472c902c">
+
+<img width="256" alt="Screenshot 2023-07-07 at 7 49 00 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/df34bc50-ad3c-4071-a601-b30eb8e62b18">
+<img width="256" alt="Screenshot 2023-07-07 at 7 47 52 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/d870864c-2373-423f-99d2-cab3a6cca168">
+<img width="256" alt="Screenshot 2023-07-07 at 7 47 31 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/c57f6274-7605-4184-b246-36444f43f521">
+<img width="256" alt="Screenshot 2023-07-07 at 7 46 13 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/7f440d69-5fb7-4592-855d-a36ce3172a13">
+<img width="256" alt="Screenshot 2023-07-07 at 7 51 24 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/6d290f3c-3743-4cc8-a0b8-bac8350988ff">
+<img width="256" alt="Screenshot 2023-07-07 at 7 50 38 PM" src="https://github.com/annethereshewent/rust-nes-emulator/assets/1106413/e32413ff-f95b-4eaf-bd2b-c20c5ff7e78e">
+
