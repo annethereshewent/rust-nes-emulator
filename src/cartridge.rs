@@ -22,11 +22,12 @@ pub struct Cartridge {
   pub chr_rom: Vec<u8>,
   pub chr_ram: Vec<u8>,
   pub mirroring: Mirroring,
-  pub mapper: Mapper
+  pub mapper: Mapper,
+  pub path: Option<String>
 }
 
 impl Cartridge {
-  pub fn new(rom: Vec<u8>) -> Self {
+  pub fn new(rom: Vec<u8>, path: Option<String>) -> Self {
     let prg_len: usize = rom[4] as usize * PRG_ROM_MULTIPLIER;
     let chr_len: usize = rom[5] as usize * CHR_ROM_MULTIPLIER;
 
@@ -68,7 +69,8 @@ impl Cartridge {
       mirroring: screen_mirroring,
       chr_ram,
       prg_ram,
-      mapper: Mapper::Empty(Empty {})
+      mapper: Mapper::Empty(Empty {}),
+      path
     };
 
     cartridge.mapper = match mapper_number {

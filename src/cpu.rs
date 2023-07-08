@@ -2,6 +2,10 @@ pub mod op_codes;
 pub mod ppu;
 pub mod apu;
 
+use std::io::Write;
+use std::fs;
+use std::path::Path;
+
 use crate::mapper::{MapperActions, Mapper};
 
 use super::cartridge::{Cartridge, Mirroring};
@@ -10,14 +14,16 @@ use apu::APU;
 
 pub struct CPU {
   pub registers: Registers,
-  memory: [u8; 0x800],
-  prg_rom: Vec<u8>,
-  prg_ram: Vec<u8>,
+  pub prg_ram: Vec<u8>,
   pub ppu: PPU,
   pub apu: APU,
   pub prg_length: usize,
+  pub prg_save: bool,
   cycles: u16,
   total_cycles: u64,
+  file_path: Option<String>,
+  memory: [u8; 0x800],
+  prg_rom: Vec<u8>,
 }
 
 const STACK_BASE_ADDR: u16 = 0x0100;
@@ -66,7 +72,25 @@ impl CPU {
       ppu: PPU::new(Vec::new(), Vec::new(), Mirroring::Vertical),
       apu: APU::new(),
       cycles: 0,
-      total_cycles: 0
+      total_cycles: 0,
+      file_path: None,
+      prg_save: false
+    }
+  }
+
+  pub fn save_game(&mut self) {
+    if let Some(file_path) = &self.file_path {
+      if self.prg_ram.len() > 0 && self.prg_save {
+        let mut file = fs::OpenOptions::new()
+          .create(true)
+          .write(true)
+          .open(file_path)
+          .unwrap();
+
+        let _ = file.write_all(&self.prg_ram);
+
+        self.prg_save = false;
+      }
     }
   }
 
@@ -161,6 +185,7 @@ impl CPU {
       0x6000..=0x7fff => {
         if let Some(mapped_address) = self.ppu.mapper.mem_write(address, value) {
           self.prg_ram[mapped_address as usize] = value;
+          self.prg_save = true;
         }
       }
       0x8000..=0xffff => {
@@ -215,6 +240,7 @@ impl CPU {
 
   pub fn load_game(&mut self, cartridge: Cartridge) {
     self.prg_length = cartridge.prg_rom.len();
+    let prg_ram_length = cartridge.prg_ram.len();
 
     self.prg_rom = cartridge.prg_rom;
     self.prg_ram = cartridge.prg_ram;
@@ -224,7 +250,23 @@ impl CPU {
     self.ppu.mapper = cartridge.mapper;
     self.ppu.update_mirroring();
 
+    if let Some(file_path) = cartridge.path {
+      self.file_path = Some(file_path.replace(".nes", ".sav"));
+    }
+
+    if prg_ram_length > 0 {
+      self.load_ram()
+    }
+
     self.registers.pc = self.mem_read_u16(0xfffc);
+  }
+
+  pub fn load_ram(&mut self) {
+    if let Some(file_path) = &self.file_path {
+      if Path::new(file_path).exists() {
+        self.prg_ram = fs::read(file_path).unwrap();
+      }
+    }
   }
 
   pub fn tick(&mut self) -> u16 {
