@@ -617,6 +617,8 @@ impl PPU {
       _ => panic!("shouldn't get here")
     }
 
+    self.mapper.ppu_bus_write(address, value);
+
     self.ppu_addr.increment(self.ctrl.vram_address_increment());
   }
 
