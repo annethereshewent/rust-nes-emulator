@@ -243,7 +243,7 @@ impl CPU {
     } else if self.apu.dmc.irq_pending && !self.registers.p.contains(CpuFlags::INTERRUPT_DISABLE) {
       self.trigger_interrupt(IRQ_INTERRUPT_VECTOR_ADDRESS);
       self.apu.dmc.irq_pending = false;
-    } else if self.ppu.mapper.irq_pending() {
+    } else if self.ppu.mapper.irq_pending() && !self.registers.p.contains(CpuFlags::INTERRUPT_DISABLE) {
       self.trigger_interrupt(IRQ_INTERRUPT_VECTOR_ADDRESS);
       self.ppu.mapper.set_irq_pending(false);
     }
