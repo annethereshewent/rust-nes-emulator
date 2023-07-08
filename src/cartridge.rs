@@ -75,10 +75,11 @@ impl Cartridge {
 
     cartridge.mapper = match mapper_number {
       0 => Mapper::Empty(Empty {}),
-      1 => Mapper::Sxrom(Sxrom::load(&mut cartridge)),
+      1 => Mapper::Sxrom(Sxrom::load(&mut cartridge, false)),
       2 => Mapper::Uxrom(Uxrom::load(&mut cartridge)),
       3 => Mapper::Cnrom(Cnrom::load(&mut cartridge)),
       4 => Mapper::Txrom(Txrom::load(&mut cartridge)),
+      155 => Mapper::Sxrom(Sxrom::load(&mut cartridge, true)),
       _ => panic!("unsupported mapper: {mapper_number}")
     };
 

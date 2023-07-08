@@ -27,11 +27,12 @@ pub struct Sxrom {
   prg_rom_page_size: u8,
   chr_page_size: u8,
   chr_shift: u32,
-  prg_shift: u32
+  prg_shift: u32,
+  ram_always_on: bool
 }
 
 impl Sxrom {
-  pub fn load(cartridge: &mut Cartridge) -> Self {
+  pub fn load(cartridge: &mut Cartridge, ram_always_on: bool) -> Self {
     cartridge.chr_ram.resize(CHR_RAM_SIZE, 0);
     cartridge.prg_ram.resize(PRG_RAM_SIZE, 0);
 
@@ -67,7 +68,8 @@ impl Sxrom {
       prg_rom_page_size,
       chr_page_size,
       chr_shift: CHR_BANK_SIZE.trailing_zeros(),
-      prg_shift: PRG_ROM_BANK_SIZE.trailing_zeros()
+      prg_shift: PRG_ROM_BANK_SIZE.trailing_zeros(),
+      ram_always_on
     };
 
 
@@ -84,7 +86,7 @@ impl Sxrom {
   }
 
   fn prg_ram_enabled(&self) -> bool {
-    (self.registers.prg >> 4) & 0b1 == 0
+    self.ram_always_on || (self.registers.prg >> 4) & 0b1 == 0
   }
 
   fn update_banks(&mut self, address: u16) {
