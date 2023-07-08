@@ -79,6 +79,26 @@ impl WasmEmulator {
     self.read_index
   }
 
+  pub fn get_prg_ram_pointer(&self) -> *const u8 {
+    self.cpu.prg_ram.as_ptr()
+  }
+
+  pub fn prg_ram_length(&self) -> usize {
+    self.cpu.prg_ram.len()
+  }
+
+  pub fn prg_save(&self) -> bool {
+    self.cpu.prg_save
+  }
+
+  pub fn set_prg_save(&mut self, val: bool) {
+    self.cpu.prg_save = val;
+  }
+
+  pub fn load_prg_ram(&mut self, ram: &[u8]) {
+    self.cpu.prg_ram = ram.to_vec();
+  }
+
   pub fn update_buffer(&mut self, buffer: &mut [f32]) {
     let mut apu = &mut self.cpu.apu;
 
@@ -110,7 +130,7 @@ impl WasmEmulator {
   }
 
   pub fn load(&mut self, rom: &[u8]) {
-    let cartridge = Cartridge::new(rom.to_vec());
+    let cartridge = Cartridge::new(rom.to_vec(), "".to_string());
     self.cpu.load_game(cartridge);
   }
 

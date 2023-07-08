@@ -14,6 +14,8 @@ use sdl2::event::Event;
 
 use std::{env, fs};
 
+const FRAMES_PER_SAVE: u8 = 180;
+
 
 struct NesAudioCallback<'a> {
   volume: f32,
@@ -55,7 +57,7 @@ fn main() {
   let bytes: Vec<u8> = fs::read(filepath).unwrap();
   let mut cpu = CPU::new();
 
-  cpu.load_game(Cartridge::new(bytes));
+  cpu.load_game(Cartridge::new(bytes, filepath.to_string()));
 
   let sdl_context = sdl2::init().unwrap();
   let video_subsystem = sdl_context.video().unwrap();
@@ -139,10 +141,19 @@ fn main() {
       .create_texture_target(PixelFormatEnum::RGB24, 256, 240)
       .unwrap();
 
+  let mut frames: u8 = 0;
+
   loop {
     let mut cycles: usize = 0;
     while cycles < CYCLES_PER_FRAME {
       cycles += (cpu.tick() * 3) as usize;
+    }
+
+    frames += 1;
+
+    if frames == FRAMES_PER_SAVE {
+      cpu.save_game();
+      frames = 0
     }
 
     cpu.ppu.cap_fps();

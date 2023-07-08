@@ -60,6 +60,8 @@
     const SAMPLE_RATE = 44100
     const BUFFER_SIZE = 4096
 
+    const FRAMES_PER_SAVE = 60 * 3
+
     async function main() {
 
       document.getElementById("load-game-btn").addEventListener("click", loadRom)
@@ -183,18 +185,21 @@
         }
       })
 
+      let fileName = ""
+
       async function handleFileChange(e) {
         if (e.target.files != null) {
           const file = e.target.files[0]
+          fileName = file.name
 
           let rom
 
           if (file.name.indexOf(".zip") !== -1) {
             // unzip the file first
             const zipFile = await JSZip.loadAsync(file)
-            const fileName = Object.keys(zipFile.files)[0]
+            const zipFileName = Object.keys(zipFile.files)[0]
 
-            rom = await zipFile?.file(fileName)?.async('arraybuffer')
+            rom = await zipFile?.file(zipFileName)?.async('arraybuffer')
           } else {
             rom = await fileToArrayBuffer(file)
           }
@@ -202,6 +207,16 @@
           if (rom != null) {
             startAudio()
             emulator.load(new Uint8Array(rom));
+
+            const prgRamJson = localStorage.getItem(fileName.split("/").pop());
+
+            if (prgRamJson != null) {
+              const prgRam = JSON.parse(prgRamJson)
+              if (prgRam.length > 0) {
+                emulator.load_prg_ram(Uint8Array.from(prgRam))
+              }
+            }
+
             requestAnimationFrame((time) => run(time))
           }
         }
@@ -268,6 +283,8 @@
 
       }
 
+      let frames = 0
+
 
       function run(time) {
         const diff = time - previousTime
@@ -279,6 +296,20 @@
           context.putImageData(getImageData(), 0, 0)
 
           handleJoypadInput()
+        }
+
+        frames++
+
+        if (frames == FRAMES_PER_SAVE) {
+          const prgRamLength = emulator.prg_ram_length();
+          const prgSave = emulator.prg_save();
+
+          if (prgRamLength > 0 && prgSave) {
+            const prgRam = new Uint8Array(wasm.memory.buffer, emulator.get_prg_ram_pointer(), prgRamLength)
+            localStorage.setItem(fileName.split("/").pop(), JSON.stringify(Array.from(prgRam)))
+            emulator.set_prg_save(false)
+          }
+          frames = 0
         }
 
         requestAnimationFrame((time) => run(time))
