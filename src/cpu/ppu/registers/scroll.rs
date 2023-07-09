@@ -1,7 +1,7 @@
 pub struct ScrollRegister {
-  pub v: u16,
-  pub t: u16,
-  pub x: u8,
+  v: u16,
+  t: u16,
+  x: u8,
   pub latch: bool
 }
 
@@ -13,6 +13,29 @@ impl ScrollRegister {
       t: 0,
       latch: false
     }
+  }
+
+  pub fn fine_x(&self) -> u8 {
+    self.x
+  }
+
+  pub fn fine_y(&self) -> u16 {
+    (self.v >> 12) & 0b111
+  }
+
+  // per https://github.com/lukexor/tetanes/blob/main/src/ppu/scroll.rs
+  pub fn attribute_shift(&self) -> u16 {
+    (self.v & 0x02) | ((self.v >> 4) & 0x04)
+  }
+
+  // see https://www.nesdev.org/wiki/PPU_scrolling#Tile_and_attribute_fetching
+  pub fn tile_address(&self) -> u16 {
+      0x2000 | (self.v & 0xfff)
+  }
+
+  pub fn attribute_address(&self) -> u16 {
+    // base  nametable select    y bits                   x bits
+    0x23C0 | (self.v & 0x0C00) | ((self.v >> 4) & 0x38) | ((self.v >> 2) & 0x07)
   }
 
   pub fn set_scroll(&mut self, val: u8) {

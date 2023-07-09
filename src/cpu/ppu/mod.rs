@@ -27,6 +27,9 @@ pub const SCREEN_WIDTH: u16 = 256;
 const MAX_FPS: u32 = 60;
 pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
+const PRERENDER_SCANLINE: u16 = 261;
+
+
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
 //   (84, 84, 84),
@@ -208,7 +211,13 @@ pub struct PPU {
   pub joypad: Joypad,
   background_pixels_drawn: Vec<bool>,
   previous_time: u128,
-  pub mapper: Mapper
+  pub mapper: Mapper,
+  previous_palette: u8,
+  current_palette: u8,
+  next_palette: u8,
+  tile_low: u8,
+  tile_high: u8,
+  tile_address: u16
 }
 
 impl PPU {
@@ -233,7 +242,13 @@ impl PPU {
       joypad: Joypad::new(),
       background_pixels_drawn: Vec::new(),
       previous_time: 0,
-      mapper: Mapper::Empty(Empty {})
+      mapper: Mapper::Empty(Empty {}),
+      previous_palette: 0,
+      current_palette: 0,
+      next_palette: 0,
+      tile_low: 0,
+      tile_high: 0,
+      tile_address: 0
     }
   }
 
@@ -241,9 +256,6 @@ impl PPU {
     self.cycles += cycles;
 
     if self.cycles >= CYCLES_PER_SCANLINE {
-      if self.current_scanline < SCREEN_HEIGHT {
-        self.draw_line();
-      }
       self.cycles -= CYCLES_PER_SCANLINE;
 
       self.current_scanline += 1;
@@ -262,6 +274,63 @@ impl PPU {
         self.nmi_triggered = false;
         self.status.remove(StatusRegister::VBLANK_STARTED);
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
+      }
+    } else {
+      for _ in 0..cycles {
+        self.cycle();
+      }
+    }
+  }
+
+  fn evaluate_sprites(&mut self) {
+
+  }
+
+  fn fetch_attribute_byte(&mut self) {
+    let attribute_address = self.scroll.attribute_address();
+    let attribute_byte = self.vram[self.mirror_vram_index(attribute_address)];
+    let shift = self.scroll.attribute_shift();
+
+    self.next_palette = 1 + (attribute_byte >> shift) & 0b11 * 4;
+  }
+
+  fn fetch_nametable_byte(&mut self) {
+    let address = self.scroll.tile_address();
+
+    self.previous_palette = self.current_palette;
+    self.current_palette = self.next_palette;
+
+    let tile_number = self.vram[self.mirror_vram_index(address) as usize];
+    let bank = self.ctrl.background_pattern_table_addr();
+
+    let tile_index = bank + (tile_number as u16) * 16;
+
+    self.tile_address = tile_index + self.scroll.fine_y();
+  }
+
+  fn cycle(&mut self) {
+    if self.rendering_enabled() {
+      if self.current_scanline < SCREEN_HEIGHT {
+        // do sprite evaluation and fetching only for visible scanlines
+        if matches!(self.cycles, 1..=256) {
+          self.evaluate_sprites()
+        } else if matches!(self.cycles, 257..=320) {
+          self.write_to_oam_address(0);
+        }
+      }
+
+      if self.current_scanline < SCREEN_HEIGHT || self.current_scanline == PRERENDER_SCANLINE {
+        // for both the prerender scanline and all visible ones, do the same things
+        if matches!(self.cycles, 1..=256) {
+          // fetch nametable byte, attribute byte, pattern table high and low bytes
+          match self.cycles % 8 {
+            1 => self.fetch_nametable_byte(),
+            3 => self.fetch_attribute_byte(),
+            5 => self.tile_low = self.read_chr(self.tile_address),
+            7 => self.tile_high = self.read_chr(self.tile_address + 8),
+            _ => ()
+          }
+        }
       }
     }
   }
