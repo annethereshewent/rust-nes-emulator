@@ -59,6 +59,10 @@ impl ScrollRegister {
     if !self.latch {
       self.x = val & 0b111;
       let coarse_x = val >> 3;
+
+      // clear coarse x in t
+      self.t &= !(0b11111);
+
       self.t |= coarse_x as u16;
     } else {
       let fine_y = val & 0b111;

@@ -294,8 +294,8 @@ impl PPU {
     }
   }
 
-  pub fn tick(&mut self, cycles: u16) {
-    self.cycles += cycles;
+  pub fn tick(&mut self) {
+    self.cycles += 1;
 
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
@@ -318,9 +318,7 @@ impl PPU {
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
       }
     } else {
-      for _ in 0..cycles {
-        self.cycle();
-      }
+      self.cycle();
     }
   }
 
@@ -580,7 +578,6 @@ impl PPU {
               self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
             }
 
-            // finally draw either the background pixel or sprite depending on priority
             rgb = if color_index != 0 && (bg_color == 0 || !sprite.sprite_behind_background) {
               let palette_index = sprite.palette[color_index as usize];
 
@@ -590,7 +587,6 @@ impl PPU {
             };
         }
       }
-      // finally render the pixel
       let actual_rgb = if let Some(rgb) = rgb {
         rgb
       } else {

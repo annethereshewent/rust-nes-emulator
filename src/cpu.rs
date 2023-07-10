@@ -351,7 +351,7 @@ impl CPU {
     let ppu_cycles = cycles * 3;
 
     for _ in 0..ppu_cycles {
-      self.ppu.tick(1);
+      self.ppu.tick();
     }
 
     self.ppu.mapper.tick(cycles as u8);
