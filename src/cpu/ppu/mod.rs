@@ -29,6 +29,8 @@ pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
 const PRERENDER_SCANLINE: u16 = 261;
 
+const OAM_FETCH_START: u16 = 257;
+
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
@@ -191,6 +193,34 @@ const PALETTE_TABLE: [(u8, u8, u8); 64] = [
 //   (0,0,0)
 // ];
 
+#[derive(Copy, Clone)]
+struct Sprite {
+  x: u8,
+  y: u8,
+  palette: [u8; 4],
+  sprite_behind_background: bool,
+  x_flip: bool,
+  y_flip: bool,
+  tile_high: u8,
+  tile_low: u8
+}
+
+
+impl Sprite {
+  pub fn new() -> Self {
+    Self {
+      x: 0,
+      y: 0,
+      palette: [0; 4],
+      sprite_behind_background: false,
+      x_flip: false,
+      y_flip: false,
+      tile_high: 0,
+      tile_low: 0,
+    }
+  }
+}
+
 pub struct PPU {
   ctrl: ControlRegister,
   mask: MaskRegister,
@@ -201,6 +231,7 @@ pub struct PPU {
   pub chr_ram: Vec<u8>,
   pub vram: [u8; 2048],
   pub oam_data: [u8; 256],
+  secondary_oam: [u8; 64],
   pub oam_address: u8,
   pub mirroring: Mirroring,
   internal_data: u8,
@@ -209,7 +240,6 @@ pub struct PPU {
   pub nmi_triggered: bool,
   pub picture: Picture,
   pub joypad: Joypad,
-  background_pixels_drawn: Vec<bool>,
   previous_time: u128,
   pub mapper: Mapper,
   previous_palette: u8,
@@ -217,7 +247,13 @@ pub struct PPU {
   next_palette: u8,
   tile_low: u8,
   tile_high: u8,
-  tile_address: u16
+  tile_address: u16,
+  oam_read: u8,
+  secondary_oam_address: u8,
+  oam_n: u8,
+  oam_m: u8,
+  sprites: [Sprite; 8],
+  sprite_zero_found: bool
 }
 
 impl PPU {
@@ -230,6 +266,7 @@ impl PPU {
       chr_rom,
       chr_ram,
       oam_data: [0; 256],
+      secondary_oam: [0; 64],
       oam_address: 0,
       vram: [0; 2048],
       mirroring,
@@ -240,7 +277,6 @@ impl PPU {
       nmi_triggered: false,
       picture: Picture::new(),
       joypad: Joypad::new(),
-      background_pixels_drawn: Vec::new(),
       previous_time: 0,
       mapper: Mapper::Empty(Empty {}),
       previous_palette: 0,
@@ -248,7 +284,13 @@ impl PPU {
       next_palette: 0,
       tile_low: 0,
       tile_high: 0,
-      tile_address: 0
+      tile_address: 0,
+      oam_read: 0,
+      oam_m: 0,
+      oam_n: 0,
+      secondary_oam_address: 0,
+      sprites: [Sprite::new(); 8],
+      sprite_zero_found: false
     }
   }
 
@@ -283,15 +325,148 @@ impl PPU {
   }
 
   fn evaluate_sprites(&mut self) {
+    match self.cycles {
+      1..=64 => {
+        // set secondary oam data to ff
+        self.secondary_oam.fill(0xff);
+        self.oam_read = 0xff;
+      }
+      65..=256 => {
+        if self.cycles == 65 {
+          self.secondary_oam_address = 0;
+          self.oam_n = 0;
+          self.oam_m = 0;
+          self.sprite_zero_found = false;
+        }
+        if self.cycles % 2 == 1 {
+          self.oam_read = self.oam_data[self.oam_address as usize];
+        } else if ((self.secondary_oam_address + 4) as usize) < self.secondary_oam.len() {
+          let y_coordinate = self.oam_data[(self.oam_n * 4) as usize];
 
+          self.secondary_oam[self.secondary_oam_address as usize] = y_coordinate;
+
+          let y_pos_in_tile: i16 = (self.current_scanline as i16) - (y_coordinate as i16);
+
+          if y_pos_in_tile >= 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
+            if self.oam_n == 0 {
+              self.sprite_zero_found = true;
+            }
+
+            // copy the remaining bytes of oam[n][1-3] into secondary oam
+            self.secondary_oam[(self.secondary_oam_address + 1) as usize] = self.oam_data[(self.oam_n * 4 + 1) as usize];
+            self.secondary_oam[(self.secondary_oam_address + 2) as usize] = self.oam_data[(self.oam_n * 4 + 2) as usize];
+            self.secondary_oam[(self.secondary_oam_address + 3) as usize] = self.oam_data[(self.oam_n * 4 + 3) as usize];
+
+            self.secondary_oam_address += 4;
+          }
+          self.oam_n = (self.oam_n + 1) % 64; // n is in the range 0-63 for evaluating all 64 sprites
+          if self.oam_n == 0 {
+            // all 64 sprites are evaluated
+            self.oam_read = self.oam_data[(self.oam_n * 4) as usize];
+            self.oam_n += 1;
+          } else if self.secondary_oam_address == self.secondary_oam.len() as u8 {
+            // evaluate the rest of the sprites and set the sprite overflow flag
+            while self.oam_n != 0 {
+              self.oam_m = 0;
+
+              let y_coordinate = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
+
+              let y_pos_in_tile = self.current_scanline as i16 - y_coordinate as i16;
+
+              if y_pos_in_tile > 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
+                self.status.insert(StatusRegister::SPRITE_OVERFLOW);
+
+                self.oam_m += 1;
+
+                while self.oam_m < 4 {
+                  self.oam_read = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
+
+                  self.oam_m = (  self.oam_m + 1) % 4;
+                }
+              } else {
+                self.oam_n = (self.oam_n + 1) % 64;
+                self.oam_m = (self.oam_m + 1) % 4;
+              }
+            }
+            self.oam_read = self.oam_data[(self.oam_n * 4) as usize];
+            self.oam_n += 1;
+          }
+        }
+      },
+      _ => ()
+    }
+  }
+
+  fn fetch_sprites(&mut self) {
+    self.write_to_oam_address(0);
+
+    // this is actually an approximation but should be good enough
+   if self.cycles % 8 == 4 {
+      let sprites_found = self.secondary_oam_address / 4;
+      let index = (self.cycles - OAM_FETCH_START) / 8;
+      let oam_index = index * 4;
+
+      let y = self.secondary_oam[oam_index as usize];
+      let mut tile_number = self.secondary_oam[(oam_index+1) as usize];
+      let attributes = self.secondary_oam[(oam_index+2) as usize];
+      let x = self.secondary_oam[(oam_index+3) as usize];
+
+      let palette_index = attributes & 0b11;
+
+      let palette = self.get_sprite_palette(palette_index);
+
+      let mut y_pos_in_tile = (self.current_scanline as i16) - (y as i16);
+
+      let y_flip = (attributes >> 7) & 0b1 == 1;
+      let x_flip = (attributes >> 6) & 0b1 == 1;
+
+      let sprite_behind_background = (attributes >> 5) & 0b1 == 1;
+
+      if y_flip {
+        y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
+      }
+
+      if y_pos_in_tile > 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
+        let bank = if self.ctrl.sprite_size() == 8 {
+          self.ctrl.sprite_pattern_table_address()
+        } else {
+          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
+          tile_number = tile_number & 0b11111110;
+
+          if y_pos_in_tile > 7 {
+            y_pos_in_tile += 8;
+          }
+          bank
+        };
+
+        let tile_index = bank + tile_number as u16 * 16;
+
+        let tile_low = self.read_chr(tile_index + y_pos_in_tile as u16);
+        let tile_high = self.read_chr(tile_index + y_pos_in_tile as u16 + 8);
+
+        if index < sprites_found as u16 {
+          let mut sprite = &mut self.sprites[index as usize];
+
+          sprite.x_flip = x_flip;
+          sprite.y_flip = y_flip;
+          sprite.sprite_behind_background = sprite_behind_background;
+          sprite.tile_high = tile_high;
+          sprite.tile_low = tile_low;
+          sprite.palette = palette;
+          sprite.x = x;
+          sprite.y = y;
+        }
+      }
+   }
   }
 
   fn fetch_attribute_byte(&mut self) {
     let attribute_address = self.scroll.attribute_address();
-    let attribute_byte = self.vram[self.mirror_vram_index(attribute_address)];
+
+    let attribute_byte = self.vram[self.mirror_vram_index(attribute_address) as usize];
     let shift = self.scroll.attribute_shift();
 
-    self.next_palette = 1 + (attribute_byte >> shift) & 0b11 * 4;
+    self.next_palette = 1 + ((attribute_byte >> shift) & 0b11)* 4;
   }
 
   fn fetch_nametable_byte(&mut self) {
@@ -311,16 +486,13 @@ impl PPU {
   fn cycle(&mut self) {
     if self.rendering_enabled() {
       if self.current_scanline < SCREEN_HEIGHT {
-        // do sprite evaluation and fetching only for visible scanlines
+        // do sprite evaluation only for visible scanlines
         if matches!(self.cycles, 1..=256) {
           self.evaluate_sprites()
-        } else if matches!(self.cycles, 257..=320) {
-          self.write_to_oam_address(0);
         }
       }
 
       if self.current_scanline < SCREEN_HEIGHT || self.current_scanline == PRERENDER_SCANLINE {
-        // for both the prerender scanline and all visible ones, do the same things
         if matches!(self.cycles, 1..=256) {
           // fetch nametable byte, attribute byte, pattern table high and low bytes
           match self.cycles % 8 {
@@ -330,7 +502,100 @@ impl PPU {
             7 => self.tile_high = self.read_chr(self.tile_address + 8),
             _ => ()
           }
+
+          if self.cycles % 8 == 0 {
+            self.scroll.increment_x();
+          }
         }
+
+        if matches!(self.cycles, 257..=320) {
+          // fetch sprites for next scanline
+          self.fetch_sprites();
+        }
+
+        match self.cycles {
+          256 => self.scroll.increment_y(),
+          257 => self.scroll.copy_x(),
+          280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
+          337..=340 => self.fetch_nametable_byte(),
+          _ => ()
+        }
+
+        if matches!(self.cycles, 321..=340) {
+          // sprite dummy cycle...
+          self.oam_read = self.secondary_oam[0];
+        }
+      }
+    }
+
+    // finally render the pixel
+    if matches!(self.cycles, 1..=256) && self.current_scanline < SCREEN_HEIGHT {
+      self.draw_pixel();
+    }
+
+  }
+
+  pub fn draw_pixel(&mut self) {
+    let x = self.cycles - 1;
+    let y = self.current_scanline;
+
+    let is_left_bg_clipped = x < 8 && !self.mask.contains(MaskRegister::SHOW_BACKGROUND_LEFTMOST);
+
+    let bg_color = if self.mask.contains(MaskRegister::SHOW_BACKGROUND) && !is_left_bg_clipped {
+      let offset = self.scroll.fine_x();
+      ((self.tile_low >> offset) & 0b1) + (((self.tile_high >> offset) & 0b1) << 1)
+    } else {
+      0
+    };
+
+    let is_left_sprite_clipped = x < 8 && !self.mask.contains(MaskRegister::SHOW_SPRITES_LEFTMOST);
+
+    if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped {
+      let found_sprite_count = self.secondary_oam_address / 4;
+
+      for i in 0..found_sprite_count {
+        let sprite = &self.sprites[i as usize];
+        let bit_pos = if sprite.x_flip {
+          x as i16 - sprite.x as i16
+        } else {
+          7 - x as i16 - sprite.x as i16
+        };
+
+        if (0..8).contains(&bit_pos) {
+          let color_index = ((sprite.tile_low >> bit_pos) & 0b1) + (((sprite.tile_high >> bit_pos) & 0b1) << 1);
+          if color_index != 0 {
+            if i == 0
+              && self.sprite_zero_found
+              && x != 255
+              && self.rendering_enabled()
+              && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
+                self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
+              }
+
+              // finally draw either the background pixel or sprite depending on priority
+              let rgb = if bg_color == 0 || !sprite.sprite_behind_background {
+                let palette_index = sprite.palette[color_index as usize];
+
+                PALETTE_TABLE[palette_index as usize]
+              } else {
+                let palette_search = if self.scroll.fine_x() + (x as u8 % 8) < 8 {
+                  self.previous_palette
+                } else {
+                  self.current_palette
+                };
+
+                let palette = self.get_bg_palette(palette_search as usize);
+
+                let palette_index = palette[bg_color as usize];
+
+                PALETTE_TABLE[palette_index as usize]
+              };
+
+              // finally render the pixel
+              self.picture.set_pixel(x as usize, y as usize, rgb);
+          }
+        }
+
       }
     }
   }
@@ -392,19 +657,6 @@ impl PPU {
     data
   }
 
-  fn draw_line(&mut self) {
-    self.background_pixels_drawn = Vec::new();
-    // self.draw_background();
-    // self.draw_sprites();
-  }
-
-  fn sprite_zero_hit(&self, i: usize, x: usize) -> bool {
-    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) &&
-    i == 0 &&
-    x != 255 &&
-    self.mask.contains(MaskRegister::SHOW_SPRITES)
-  }
-
   fn read_chr(&mut self, address: u16) -> u8 {
 
     let chr = if !self.chr_rom.is_empty() {
@@ -425,168 +677,6 @@ impl PPU {
     }
   }
 
-  fn draw_sprites(&mut self) {
-    let y = self.current_scanline;
-
-    for i in (0..self.oam_data.len()).step_by(4) {
-      let tile_y = self.oam_data[i];
-      let mut tile_number = self.oam_data[i+1];
-      let attributes = self.oam_data[i+2];
-      let tile_x = self.oam_data[i+3];
-
-      let y_flip = (attributes >> 7) & 0b1 == 1;
-      let x_flip = (attributes >> 6) & 0b1 == 1;
-
-      let sprite_behind_background = (attributes >> 5) & 0b1 == 1;
-
-      let mut y_pos_in_tile: i16 = (y as i16) - (tile_y as i16);
-
-      if y_flip {
-        y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
-      }
-
-      if y_pos_in_tile >= 0 && (y_pos_in_tile as u16) < self.ctrl.sprite_size() as u16 {
-        let palette_index = attributes & 0b11;
-
-        let sprite_palettes = self.get_sprite_palette(palette_index);
-
-
-        let mut y_index = y_pos_in_tile;
-
-        let bank = if self.ctrl.sprite_size() == 8 {
-          self.ctrl.sprite_pattern_table_address()
-        } else {
-          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
-          tile_number = tile_number & 0b11111110;
-
-          if y_pos_in_tile > 7 {
-            y_index += 8;
-          }
-
-          bank
-        };
-
-        let tile_index = bank + tile_number as u16 * 16;
-
-        let lower_byte = self.read_chr(tile_index + y_index as u16);
-        let upper_byte = self.read_chr(tile_index + y_index as u16 + 8);
-
-        for x in 0..8 {
-          let bit_pos = if x_flip {
-            x
-          } else {
-            7 - x
-          };
-
-          let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
-
-          let rgb = match color_index {
-            0 => continue,
-            _ => PALETTE_TABLE[sprite_palettes[color_index as usize] as usize]
-          };
-
-          let x_pos = (tile_x as usize + x) as usize;
-
-          if x_pos >= SCREEN_WIDTH as usize || x_pos < 0 as usize {
-            continue;
-          }
-
-          if self.sprite_zero_hit(i, x_pos) {
-            self.status.set(StatusRegister::SPRITE_ZERO_HIT, true);
-          }
-
-          let is_pixel_visible = !(sprite_behind_background && self.background_pixels_drawn[x_pos]);
-
-          if is_pixel_visible {
-            self.picture.set_pixel(x_pos, y as usize, rgb);
-          }
-        }
-
-      }
-    }
-  }
-
-  // fn draw_background(&mut self) {
-  //   let nametable_base = self.ctrl.base_table_address();
-
-  //   let second_nametable_base = match (nametable_base, &self.mirroring) {
-  //     (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
-  //     (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
-  //     (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
-  //     (_, Mirroring::SingleScreenA) => 0x2000,
-  //     (_, Mirroring::SingleScreenB) => 0x2400,
-  //     _ => todo!("mirroring mode not implemented")
-  //   };
-
-  //   let chr_rom_bank = self.ctrl.background_pattern_table_addr();
-
-  //   let y = self.current_scanline;
-
-  //   // let mut scrolled_y = y;
-
-  //   for x in 0..SCREEN_WIDTH {
-  //     let mut scrolled_x = x + self.scroll.x as u16;
-  //     let mut scrolled_y = self.scroll.y as u16 + y;
-
-  //     let current_nametable = match &self.mirroring {
-  //       Mirroring::Vertical => {
-  //         if scrolled_x < SCREEN_WIDTH {
-  //           nametable_base
-  //         } else {
-  //           scrolled_x %= SCREEN_WIDTH;
-  //           second_nametable_base
-  //         }
-  //       }
-  //       Mirroring::Horizontal => {
-  //         if scrolled_y < SCREEN_HEIGHT {
-  //           nametable_base
-  //         } else {
-  //           scrolled_y %= SCREEN_HEIGHT;
-  //           second_nametable_base
-  //         }
-  //       }
-  //       Mirroring::SingleScreenA | Mirroring::SingleScreenB => {
-  //         if scrolled_y >= SCREEN_HEIGHT {
-  //           scrolled_y %= SCREEN_HEIGHT;
-  //         }
-  //         if scrolled_x >= SCREEN_WIDTH {
-  //           scrolled_x %= SCREEN_WIDTH;
-  //         }
-  //         nametable_base
-  //       },
-  //       _ => todo!("four screen not implemented")
-  //     };
-
-  //     let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
-
-  //     let tile_number = self.vram[self.mirror_vram_index(current_nametable + tile_pos) as usize];
-
-  //     let tile_index = chr_rom_bank + (tile_number as u16 * 16);
-
-  //     let x_pos_in_tile = scrolled_x % 8;
-  //     let y_pos_in_tile = scrolled_y % 8;
-
-  //     let lower_byte = self.read_chr(tile_index + y_pos_in_tile);
-  //     let upper_byte = self.read_chr(tile_index + y_pos_in_tile + 8);
-
-  //     let bit_pos = 7 - x_pos_in_tile;
-
-  //     let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
-
-  //     let tile_column = scrolled_x / 8;
-  //     let tile_row = scrolled_y / 8;
-
-  //     let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
-
-  //     self.background_pixels_drawn.push(color_index != 0);
-
-  //     // finally render the pixel!
-  //     let rgb = PALETTE_TABLE[bg_palette[color_index as usize] as usize];
-  //     self.picture.set_pixel(x as usize, y as usize, rgb);
-
-  //   }
-  // }
-
   fn get_sprite_palette(&self, palette_index: u8) -> [u8; 4] {
     // there are 0x11 (or 17) indexes for the background palettes
     let start = 0x11 + (palette_index * 4) as usize;
@@ -599,38 +689,16 @@ impl PPU {
     ]
   }
 
-  fn get_bg_palette(&self, nametable_base: usize, tile_column: usize, tile_row: usize) -> [u8; 4] {
-    // 1 byte in attribute table controls the palette for 4 neighboring meta-tiles, where a meta-tile is 2x2 tiles
-    // thus, 1 byte controls 4x4 tiles or 32x32 pixels total.
-    // so in order to get the index, divide the tile column position by 4, and the tile row position by 4 and multiply by 8
-    // (8 * 32 = 256, the screen width)
-    let attribute_table_index = (tile_row / 4) * 8 + (tile_column / 4);
-
-    let attr_byte = self.vram[self.mirror_vram_index((nametable_base + 0x3c0 + attribute_table_index) as u16) as usize];
-
-    let x_meta_tile_pos = (tile_column % 4) / 2;
-    let y_meta_tile_pos = (tile_row % 4) / 2;
-
-    // once you have the x,y coordinates within the 4 neighboring meta tiles, you can determine what two bits to use for the palette
-    // for instance, 0,0 is the top left meta-tile, 1,0 is the top right, and so on.
-    // the first two bits determine the first meta tile, 2nd 2 bits determine the 2nd, 3rd determine the 3rd, last two bits determine 4th tile
-    let palette_index = match (x_meta_tile_pos, y_meta_tile_pos) {
-      (0,0) => attr_byte & 0b11,
-      (1,0) => (attr_byte >> 2) & 0b11,
-      (0,1) => (attr_byte >> 4) & 0b11,
-      (1,1) => (attr_byte >> 6) & 0b11,
-      _ => panic!("should not get here")
-    };
-
-    // despite there being 3 colors per palette, after each palette an index is skipped, hence the * 4
-    // ie: palette 0 starts at 0x01 and ends at 0x03, but palette 1 doesn't start until 0x05
-    let palette_start: usize = 1 + (palette_index as usize * 4);
-
-    [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
+  fn get_bg_palette(&self, palette_start: usize) -> [u8; 4] {
+    [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start + 1], self.palette_table[palette_start + 2]]
   }
 
   pub fn read_oam_data(&self) -> u8 {
-    self.oam_data[self.oam_address as usize]
+    if self.current_scanline < SCREEN_HEIGHT && self.rendering_enabled() && matches!(self.cycles, 257..=320) {
+      self.secondary_oam[(self.oam_n * 4 + self.oam_m) as usize]
+    } else {
+      self.oam_data[self.oam_address as usize]
+    }
   }
 
   pub fn write_to_control(&mut self, value: u8) {
