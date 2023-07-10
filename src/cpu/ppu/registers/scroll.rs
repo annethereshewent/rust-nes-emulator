@@ -76,7 +76,7 @@ impl ScrollRegister {
   pub fn set_nametable_select(&mut self, val: u8) {
     let nametable_select = val & 0b11;
 
-    self.t |= (nametable_select as u16) << 10;
+    self.t = (self.t & !(0b000_11_00000_00000)) | ((nametable_select & 0b11) as u16) << 10;
   }
 
   pub fn set_address(&mut self, val: u8) {

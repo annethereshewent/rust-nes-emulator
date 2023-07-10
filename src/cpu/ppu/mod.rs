@@ -466,7 +466,7 @@ impl PPU {
     let attribute_byte = self.vram[self.mirror_vram_index(attribute_address) as usize];
     let shift = self.scroll.attribute_shift();
 
-    self.next_palette = 1 + ((attribute_byte >> shift) & 0b11)* 4;
+    self.next_palette = 1 + ((attribute_byte >> shift) & 0b11) * 4;
   }
 
   fn fetch_nametable_byte(&mut self) {
@@ -718,6 +718,7 @@ impl PPU {
     if !tmp && self.status.contains(StatusRegister::VBLANK_STARTED) && self.ctrl.generate_nmi_interrupt() {
       self.nmi_triggered = true;
     }
+    self.scroll.set_nametable_select(value);
   }
 
   pub fn write_to_mask(&mut self, value: u8) {
@@ -766,7 +767,7 @@ impl PPU {
   }
 
   fn increment_address(&mut self, val: u8) {
-    if self.rendering_enabled() {
+    if self.rendering_enabled() && self.current_scanline < SCREEN_WIDTH && self.current_scanline == PRERENDER_SCANLINE {
       self.scroll.increment_x();
       self.scroll.increment_y();
     } else {
