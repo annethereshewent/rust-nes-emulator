@@ -231,7 +231,7 @@ pub struct PPU {
   pub chr_ram: Vec<u8>,
   pub vram: [u8; 2048],
   pub oam_data: [u8; 256],
-  secondary_oam: [u8; 64],
+  secondary_oam: [u8; 32],
   pub oam_address: u8,
   pub mirroring: Mirroring,
   internal_data: u8,
@@ -266,7 +266,7 @@ impl PPU {
       chr_rom,
       chr_ram,
       oam_data: [0; 256],
-      secondary_oam: [0; 64],
+      secondary_oam: [0; 32],
       oam_address: 0,
       vram: [0; 2048],
       mirroring,
@@ -555,11 +555,12 @@ impl PPU {
 
       for i in 0..found_sprite_count {
         let sprite = &self.sprites[i as usize];
-        let bit_pos = if sprite.x_flip {
-          x as i16 - sprite.x as i16
-        } else {
-          7 - x as i16 - sprite.x as i16
-        };
+
+        let mut bit_pos = x as i16 - sprite.x as i16;
+
+        if !sprite.x_flip {
+          bit_pos = 7 - bit_pos;
+        }
 
         if (0..8).contains(&bit_pos) {
           let color_index = ((sprite.tile_low >> bit_pos) & 0b1) + (((sprite.tile_high >> bit_pos) & 0b1) << 1);
