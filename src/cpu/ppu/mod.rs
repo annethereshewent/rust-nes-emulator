@@ -493,7 +493,7 @@ impl PPU {
       }
 
       if self.current_scanline < SCREEN_HEIGHT || self.current_scanline == PRERENDER_SCANLINE {
-        if matches!(self.cycles, 1..=256) {
+        if matches!(self.cycles, 1..=256) || matches!(self.cycles, 321..=336) {
           // fetch nametable byte, attribute byte, pattern table high and low bytes
           match self.cycles % 8 {
             1 => self.fetch_nametable_byte(),
@@ -506,19 +506,24 @@ impl PPU {
           if self.cycles % 8 == 0 {
             self.scroll.increment_x();
           }
+        } else if matches!(self.cycles, 337..=340) {
+          self.fetch_nametable_byte();
+        }
+
+        match self.cycles {
+          1..=8 if self.current_scanline == PRERENDER_SCANLINE => {
+            let address = (self.cycles - 1) as usize;
+            self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
+          },
+          256 => self.scroll.increment_y(),
+          257 => self.scroll.copy_x(),
+          280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
+          _ => ()
         }
 
         if matches!(self.cycles, 257..=320) {
           // fetch sprites for next scanline
           self.fetch_sprites();
-        }
-
-        match self.cycles {
-          256 => self.scroll.increment_y(),
-          257 => self.scroll.copy_x(),
-          280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
-          337..=340 => self.fetch_nametable_byte(),
-          _ => ()
         }
 
         if matches!(self.cycles, 321..=340) {
@@ -550,6 +555,8 @@ impl PPU {
 
     let is_left_sprite_clipped = x < 8 && !self.mask.contains(MaskRegister::SHOW_SPRITES_LEFTMOST);
 
+    let mut rgb: Option<(u8, u8, u8)> = None;
+
     if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped {
       let found_sprite_count = self.secondary_oam_address / 4;
 
@@ -564,40 +571,43 @@ impl PPU {
 
         if (0..8).contains(&bit_pos) {
           let color_index = ((sprite.tile_low >> bit_pos) & 0b1) + (((sprite.tile_high >> bit_pos) & 0b1) << 1);
-          if color_index != 0 {
-            if i == 0
-              && self.sprite_zero_found
-              && x != 255
-              && self.rendering_enabled()
-              && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
-                self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
-              }
+          if i == 0
+            && color_index != 0
+            && self.sprite_zero_found
+            && x != 255
+            && self.rendering_enabled()
+            && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
+              self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
+            }
 
-              // finally draw either the background pixel or sprite depending on priority
-              let rgb = if bg_color == 0 || !sprite.sprite_behind_background {
-                let palette_index = sprite.palette[color_index as usize];
+            // finally draw either the background pixel or sprite depending on priority
+            rgb = if color_index != 0 && (bg_color == 0 || !sprite.sprite_behind_background) {
+              let palette_index = sprite.palette[color_index as usize];
 
-                PALETTE_TABLE[palette_index as usize]
-              } else {
-                let palette_search = if self.scroll.fine_x() + (x as u8 % 8) < 8 {
-                  self.previous_palette
-                } else {
-                  self.current_palette
-                };
-
-                let palette = self.get_bg_palette(palette_search as usize);
-
-                let palette_index = palette[bg_color as usize];
-
-                PALETTE_TABLE[palette_index as usize]
-              };
-
-              // finally render the pixel
-              self.picture.set_pixel(x as usize, y as usize, rgb);
-          }
+              Some(PALETTE_TABLE[palette_index as usize])
+            } else {
+              None
+            };
         }
-
       }
+      // finally render the pixel
+      let actual_rgb = if let Some(rgb) = rgb {
+        rgb
+      } else {
+        let palette_search = if self.scroll.fine_x() + (x as u8 % 8) < 8 {
+          self.previous_palette
+        } else {
+          self.current_palette
+        };
+
+        let palette = self.get_bg_palette(palette_search as usize);
+
+        let palette_index = palette[bg_color as usize];
+
+        PALETTE_TABLE[palette_index as usize]
+      };
+
+      self.picture.set_pixel(x as usize, y as usize, actual_rgb);
     }
   }
 
