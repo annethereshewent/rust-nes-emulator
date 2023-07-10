@@ -124,6 +124,8 @@ impl ScrollRegister {
       if y == 29 {
         y = 0;
         self.v ^= 0x800;
+      } else if y == 31 {
+        y = 0
       } else {
         y += 1;
       }

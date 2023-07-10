@@ -253,7 +253,9 @@ pub struct PPU {
   oam_n: u8,
   oam_m: u8,
   sprites: [Sprite; 8],
-  sprite_zero_found: bool
+  sprite_zero_found: bool,
+  tile_shift_high: u16,
+  tile_shift_low: u16
 }
 
 impl PPU {
@@ -290,7 +292,9 @@ impl PPU {
       oam_n: 0,
       secondary_oam_address: 0,
       sprites: [Sprite::new(); 8],
-      sprite_zero_found: false
+      sprite_zero_found: false,
+      tile_shift_high: 0,
+      tile_shift_low: 0
     }
   }
 
@@ -476,6 +480,9 @@ impl PPU {
     let tile_number = self.vram[self.mirror_vram_index(address) as usize];
     let bank = self.ctrl.background_pattern_table_addr();
 
+    self.tile_shift_low |= self.tile_low as u16;
+    self.tile_shift_high |= self.tile_high as u16;
+
     let tile_index = bank + (tile_number as u16) * 16;
 
     self.tile_address = tile_index + self.scroll.fine_y();
@@ -535,6 +542,10 @@ impl PPU {
     if matches!(self.cycles, 1..=256) && self.current_scanline < SCREEN_HEIGHT {
       self.draw_pixel();
     }
+    if matches!(self.cycles, 1..=256) {
+      self.tile_shift_high <<= 1;
+      self.tile_shift_low <<= 1;
+    }
 
   }
 
@@ -546,7 +557,7 @@ impl PPU {
 
     let bg_color = if self.mask.contains(MaskRegister::SHOW_BACKGROUND) && !is_left_bg_clipped {
       let offset = self.scroll.fine_x();
-      ((self.tile_low >> offset) & 0b1) + (((self.tile_high >> offset) & 0b1) << 1)
+      (((self.tile_shift_high << offset) & 0x8000) >> 14) + (((self.tile_shift_low << offset) & 0x8000) >> 15)
     } else {
       0
     };
@@ -590,7 +601,7 @@ impl PPU {
       let actual_rgb = if let Some(rgb) = rgb {
         rgb
       } else {
-        let palette_search = if self.scroll.fine_x() + (x as u8 % 8) < 8 {
+        let palette_search = if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
           self.previous_palette
         } else {
           self.current_palette
