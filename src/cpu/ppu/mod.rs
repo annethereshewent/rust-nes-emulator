@@ -257,6 +257,7 @@ pub struct PPU {
   sprite_zero_found: bool,
   sprite_in_range: bool,
   sprite_zero_in_range: bool,
+  sprites_present: [bool; 256],
   overflow_count: u8,
   evaluation_done: bool,
   tile_shift_high: u16,
@@ -300,6 +301,7 @@ impl PPU {
       sprite_zero_found: false,
       sprite_zero_in_range: false,
       sprite_in_range: false,
+      sprites_present: [false; 256],
       evaluation_done: false,
       overflow_count: 0,
       tile_shift_high: 0,
@@ -506,6 +508,10 @@ impl PPU {
           sprite.palette = palette;
           sprite.x = x;
           sprite.y = y;
+
+          for spr in self.sprites_present.iter_mut().skip(sprite.x as usize).take(8) {
+            *spr = true;
+          }
         }
       }
    }
@@ -565,7 +571,7 @@ impl PPU {
         }
 
         match self.cycles {
-          1..=8 if self.current_scanline == PRERENDER_SCANLINE => {
+          1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
             let address = (self.cycles - 1) as usize;
             self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
           },
@@ -577,6 +583,9 @@ impl PPU {
 
         if matches!(self.cycles, 257..=320) {
           // fetch sprites for next scanline
+          if self.cycles == 257 {
+            self.sprites_present.fill(false);
+          }
           self.fetch_sprites();
         }
 
@@ -615,7 +624,7 @@ impl PPU {
 
     let mut rgb: Option<(u8, u8, u8)> = None;
 
-    if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped {
+    if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped && self.sprites_present[x as usize] {
       let found_sprite_count = self.secondary_oam_address / 4;
 
       for i in 0..found_sprite_count {
@@ -646,28 +655,25 @@ impl PPU {
           };
         }
       }
-      let actual_rgb = if let Some(rgb) = rgb {
-        rgb
+    }
+
+    let actual_rgb = if let Some(rgb) = rgb {
+      rgb
+    } else {
+      let palette_search = if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
+        self.previous_palette
       } else {
-        let palette_search = if self.rendering_enabled() {
-          if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
-            self.previous_palette
-          } else {
-            self.current_palette
-          }
-        } else {
-          (self.scroll.get_address() % 32) as u8
-        };
-
-        let palette = self.get_bg_palette(palette_search as usize);
-
-        let palette_index = palette[bg_color as usize];
-
-        PALETTE_TABLE[palette_index as usize]
+        self.current_palette
       };
 
-      self.picture.set_pixel(x as usize, y as usize, actual_rgb);
-    }
+      let palette = self.get_bg_palette(palette_search as usize);
+
+      let palette_index = palette[bg_color as usize];
+
+      PALETTE_TABLE[palette_index as usize]
+    };
+
+    self.picture.set_pixel(x as usize, y as usize, actual_rgb);
   }
 
   pub fn update_mirroring(&mut self) {
