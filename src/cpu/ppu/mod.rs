@@ -368,12 +368,14 @@ impl PPU {
               self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
             }
           } else {
-            let y_coordinate = self.oam_read as u16;
+            if self.oam_m == 0 {
+              let y_coordinate = self.oam_read as u16;
 
-            let sprite_height = self.ctrl.sprite_size() as u16;
+              let sprite_height = self.ctrl.sprite_size() as u16;
 
-            if !self.sprite_in_range && (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
-              self.sprite_in_range = true;
+              if !self.sprite_in_range && (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
+                self.sprite_in_range = true;
+              }
             }
 
             // if 8 sprites haven't been found yet
@@ -440,7 +442,7 @@ impl PPU {
               }
             }
           }
-          self.oam_address = (self.oam_n * 4) | self.oam_m;
+          self.oam_address = (self.oam_n * 4) + self.oam_m;
         }
       },
       _ => ()
@@ -473,11 +475,6 @@ impl PPU {
 
       if y_flip {
         y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
-      }
-
-      if index >= self.sprite_count as u16 {
-        y_pos_in_tile = 0;
-        tile_number = 0xff;
       }
 
       if y_pos_in_tile >= 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
