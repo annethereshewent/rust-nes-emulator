@@ -650,17 +650,21 @@ impl PPU {
       let actual_rgb = if let Some(rgb) = rgb {
         rgb
       } else {
-        let palette_search = if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
-          self.previous_palette
-        } else {
-          self.current_palette
-        };
+          let palette_search = if self.rendering_enabled() {
+            if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
+              self.previous_palette
+            } else {
+              self.current_palette
+            }
+          } else {
+            (self.scroll.get_address() % 32) as u8
+          };
 
-        let palette = self.get_bg_palette(palette_search as usize);
+          let palette = self.get_bg_palette(palette_search as usize);
 
-        let palette_index = palette[bg_color as usize];
+          let palette_index = palette[bg_color as usize];
 
-        PALETTE_TABLE[palette_index as usize]
+          PALETTE_TABLE[palette_index as usize]
       };
 
       self.picture.set_pixel(x as usize, y as usize, actual_rgb);
