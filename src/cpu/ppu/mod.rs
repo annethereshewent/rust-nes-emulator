@@ -258,6 +258,7 @@ pub struct PPU {
   sprite_in_range: bool,
   sprite_zero_in_range: bool,
   sprites_present: [bool; 256],
+  sprite_count: u8,
   overflow_count: u8,
   evaluation_done: bool,
   tile_shift_high: u16,
@@ -305,13 +306,12 @@ impl PPU {
       evaluation_done: false,
       overflow_count: 0,
       tile_shift_high: 0,
-      tile_shift_low: 0
+      tile_shift_low: 0,
+      sprite_count: 0
     }
   }
 
   pub fn tick(&mut self) {
-    self.cycles += 1;
-
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
 
@@ -335,6 +335,7 @@ impl PPU {
     } else {
       self.cycle();
     }
+    self.cycles += 1;
   }
 
   fn evaluate_sprites(&mut self) {
@@ -354,6 +355,7 @@ impl PPU {
           self.evaluation_done = false;
         } else if self.cycles == 256 {
           self.sprite_zero_found = self.sprite_zero_in_range;
+          self.sprite_count = self.secondary_oam_address / 4;
         }
 
         if self.cycles % 2 == 1 {
@@ -450,7 +452,6 @@ impl PPU {
 
     // this is actually an approximation but should be good enough
    if (self.cycles % 8) == 4 {
-      let sprites_found = self.secondary_oam_address / 4;
       let index = (self.cycles - OAM_FETCH_START) / 8;
       let oam_index = index * 4;
 
@@ -474,7 +475,7 @@ impl PPU {
         y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
       }
 
-      if index >= sprites_found as u16 {
+      if index >= self.sprite_count as u16 {
         y_pos_in_tile = 0;
         tile_number = 0xff;
       }
@@ -497,7 +498,7 @@ impl PPU {
         let tile_low = self.read_chr(tile_index + y_pos_in_tile as u16);
         let tile_high = self.read_chr(tile_index + y_pos_in_tile as u16 + 8);
 
-        if index < sprites_found as u16 {
+        if index < self.sprite_count as u16 {
           let mut sprite = &mut self.sprites[index as usize];
 
           sprite.x_flip = x_flip;
@@ -624,10 +625,15 @@ impl PPU {
 
     let mut rgb: Option<(u8, u8, u8)> = None;
 
-    if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped && self.sprites_present[x as usize] {
-      let found_sprite_count = self.secondary_oam_address / 4;
 
-      for i in 0..found_sprite_count {
+
+    if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped && self.sprites_present[x as usize] {
+      // the culprit seems to be pixel/cycle number 64
+      if y > 200 && x == 64 && self.sprite_count == 0 {
+        println!("found the no man's land");
+      }
+
+      for i in 0..self.sprite_count {
         let sprite = &self.sprites[i as usize];
 
         let mut bit_pos = x as i16 - sprite.x as i16;
