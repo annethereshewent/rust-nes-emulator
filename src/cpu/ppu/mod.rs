@@ -2,6 +2,7 @@ pub mod registers;
 pub mod picture;
 pub mod joypad;
 
+use std::cmp::Ordering;
 use std::thread::sleep;
 use std::time::{Duration, UNIX_EPOCH, SystemTime};
 
@@ -254,6 +255,10 @@ pub struct PPU {
   oam_m: u8,
   sprites: [Sprite; 8],
   sprite_zero_found: bool,
+  sprite_in_range: bool,
+  sprite_zero_in_range: bool,
+  overflow_count: u8,
+  evaluation_done: bool,
   tile_shift_high: u16,
   tile_shift_low: u16
 }
@@ -293,6 +298,10 @@ impl PPU {
       secondary_oam_address: 0,
       sprites: [Sprite::new(); 8],
       sprite_zero_found: false,
+      sprite_zero_in_range: false,
+      sprite_in_range: false,
+      evaluation_done: false,
+      overflow_count: 0,
       tile_shift_high: 0,
       tile_shift_low: 0
     }
@@ -335,64 +344,99 @@ impl PPU {
       }
       65..=256 => {
         if self.cycles == 65 {
+          self.sprite_in_range = false;
           self.secondary_oam_address = 0;
-          self.oam_n = 0;
-          self.oam_m = 0;
-          self.sprite_zero_found = false;
+          self.oam_n = (self.oam_address / 4) % 64;
+          self.oam_m = self.oam_address % 4;
+          self.sprite_zero_in_range = false;
+          self.evaluation_done = false;
+        } else if self.cycles == 256 {
+          self.sprite_zero_found = self.sprite_zero_in_range;
         }
+
         if self.cycles % 2 == 1 {
           self.oam_read = self.oam_data[self.oam_address as usize];
-        } else if ((self.secondary_oam_address + 4) as usize) < self.secondary_oam.len() {
-          let y_coordinate = self.oam_data[(self.oam_n * 4) as usize];
+        } else {
+          if self.evaluation_done {
+            self.oam_n = (self.oam_n + 1) % 64;
 
-          self.secondary_oam[self.secondary_oam_address as usize] = y_coordinate;
+            if (self.secondary_oam_address as usize) >= self.secondary_oam.len() {
+              self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
+            }
+          } else {
+            let y_coordinate = self.oam_read as u16;
 
-          let y_pos_in_tile: i16 = (self.current_scanline as i16) - (y_coordinate as i16);
+            let sprite_height = self.ctrl.sprite_size() as u16;
 
-          if y_pos_in_tile >= 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
-            if self.oam_n == 0 {
-              self.sprite_zero_found = true;
+            if !self.sprite_in_range && (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
+              self.sprite_in_range = true;
             }
 
-            // copy the remaining bytes of oam[n][1-3] into secondary oam
-            self.secondary_oam[(self.secondary_oam_address + 1) as usize] = self.oam_data[(self.oam_n * 4 + 1) as usize];
-            self.secondary_oam[(self.secondary_oam_address + 2) as usize] = self.oam_data[(self.oam_n * 4 + 2) as usize];
-            self.secondary_oam[(self.secondary_oam_address + 3) as usize] = self.oam_data[(self.oam_n * 4 + 3) as usize];
+            // if 8 sprites haven't been found yet
+            if (self.secondary_oam_address as usize) < self.secondary_oam.len() {
+              self.secondary_oam[self.secondary_oam_address as usize] = self.oam_read;
 
-            self.secondary_oam_address += 4;
-          }
-          self.oam_n = (self.oam_n + 1) % 64; // n is in the range 0-63 for evaluating all 64 sprites
-          if self.oam_n == 0 {
-            // all 64 sprites are evaluated
-            self.oam_read = self.oam_data[(self.oam_n * 4) as usize];
-            self.oam_n += 1;
-          } else if self.secondary_oam_address == self.secondary_oam.len() as u8 {
-            // evaluate the rest of the sprites and set the sprite overflow flag
-            while self.oam_n != 0 {
-              self.oam_m = 0;
+              if self.sprite_in_range {
+                self.oam_m += 1;
+                self.secondary_oam_address += 1;
 
-              let y_coordinate = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
+                if self.oam_n == 0 {
+                  self.sprite_zero_in_range = true;
+                }
 
-              let y_pos_in_tile = self.current_scanline as i16 - y_coordinate as i16;
+                if self.oam_m == 4 {
+                  self.sprite_in_range = false;
 
-              if y_pos_in_tile > 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
+                  self.oam_m = 0;
+                  self.oam_n = (self.oam_n + 1) % 64;
+
+                  if self.oam_n == 0 {
+                    self.evaluation_done = true;
+                  }
+                }
+              } else {
+                self.oam_n = (self.oam_n + 1) % 64;
+                if self.oam_n == 0 {
+                  self.evaluation_done = true;
+                }
+              }
+            } else {
+              self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
+
+              if self.sprite_in_range {
                 self.status.insert(StatusRegister::SPRITE_OVERFLOW);
 
                 self.oam_m += 1;
 
-                while self.oam_m < 4 {
-                  self.oam_read = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
+                if self.oam_m == 4 {
+                  self.oam_m = 0;
+                  self.oam_n = (self.oam_n + 1) % 64;
 
-                  self.oam_m = (self.oam_m + 1) % 4;
+                  match self.overflow_count.cmp(&0) {
+                    Ordering::Equal => {
+                      self.overflow_count = 3;
+                    },
+                    Ordering::Greater => {
+                      self.overflow_count -= 1;
+                      if self.overflow_count == 0 {
+                        self.evaluation_done = true;
+                        self.oam_m = 0;
+                      }
+                    },
+                    Ordering::Less => ()
+                  }
                 }
               } else {
                 self.oam_n = (self.oam_n + 1) % 64;
                 self.oam_m = (self.oam_m + 1) % 4;
+
+                if self.oam_n == 0 {
+                  self.evaluation_done = true;
+                }
               }
             }
-            self.oam_read = self.oam_data[(self.oam_n * 4) as usize];
-            self.oam_n += 1;
           }
+          self.oam_address = (self.oam_n * 4) | self.oam_m;
         }
       },
       _ => ()
@@ -428,7 +472,12 @@ impl PPU {
         y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
       }
 
-      if y_pos_in_tile > 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
+      if index >= sprites_found as u16 {
+        y_pos_in_tile = 0;
+        tile_number = 0xff;
+      }
+
+      if y_pos_in_tile >= 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
         let bank = if self.ctrl.sprite_size() == 8 {
           self.ctrl.sprite_pattern_table_address()
         } else {
@@ -713,7 +762,7 @@ impl PPU {
 
   pub fn read_oam_data(&self) -> u8 {
     if self.current_scanline < SCREEN_HEIGHT && self.rendering_enabled() && matches!(self.cycles, 257..=320) {
-      self.secondary_oam[(self.oam_n * 4 + self.oam_m) as usize]
+      self.secondary_oam[self.secondary_oam_address as usize]
     } else {
       self.oam_data[self.oam_address as usize]
     }
