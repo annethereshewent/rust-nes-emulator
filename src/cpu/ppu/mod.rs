@@ -447,7 +447,7 @@ impl PPU {
     self.write_to_oam_address(0);
 
     // this is actually an approximation but should be good enough
-   if self.cycles % 8 == 4 {
+   if (self.cycles % 8) == 4 {
       let sprites_found = self.secondary_oam_address / 4;
       let index = (self.cycles - OAM_FETCH_START) / 8;
       let oam_index = index * 4;
@@ -635,36 +635,35 @@ impl PPU {
             && x != 255
             && self.rendering_enabled()
             && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
-              self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
-            }
+            self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
+          }
 
-            rgb = if color_index != 0 && (bg_color == 0 || !sprite.sprite_behind_background) {
-              let palette_index = sprite.palette[color_index as usize];
-
-              Some(PALETTE_TABLE[palette_index as usize])
-            } else {
-              None
-            };
+          rgb = if color_index != 0 && (bg_color == 0 || !sprite.sprite_behind_background) {
+            let palette_index = sprite.palette[color_index as usize];
+            Some(PALETTE_TABLE[palette_index as usize])
+          } else {
+            None
+          };
         }
       }
       let actual_rgb = if let Some(rgb) = rgb {
         rgb
       } else {
-          let palette_search = if self.rendering_enabled() {
-            if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
-              self.previous_palette
-            } else {
-              self.current_palette
-            }
+        let palette_search = if self.rendering_enabled() {
+          if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
+            self.previous_palette
           } else {
-            (self.scroll.get_address() % 32) as u8
-          };
+            self.current_palette
+          }
+        } else {
+          (self.scroll.get_address() % 32) as u8
+        };
 
-          let palette = self.get_bg_palette(palette_search as usize);
+        let palette = self.get_bg_palette(palette_search as usize);
 
-          let palette_index = palette[bg_color as usize];
+        let palette_index = palette[bg_color as usize];
 
-          PALETTE_TABLE[palette_index as usize]
+        PALETTE_TABLE[palette_index as usize]
       };
 
       self.picture.set_pixel(x as usize, y as usize, actual_rgb);
