@@ -26,7 +26,7 @@ impl ScrollRegister {
 
   pub fn copy_x(&mut self) {
     // v: ....A.. ...BCDEF <- t: ....A.. ...BCDEF
-    let coarse_x_mask = 0b100_000_11111;
+    let coarse_x_mask = 0b1_00000_11111;
 
     // reset coarse x in v first, then copy it over from t
     self.v = (self.v & !(coarse_x_mask)) | (self.t & coarse_x_mask);
@@ -68,7 +68,7 @@ impl ScrollRegister {
       let fine_y = val & 0b111;
       let coarse_y = val >> 3;
 
-      self.t &= !(0b111_00_111111_00000);
+      self.t &= !(0b111_00_11111_00000);
 
       self.t |= (coarse_y as u16) << 5;
       self.t |= (fine_y as u16) << 12;
@@ -80,17 +80,17 @@ impl ScrollRegister {
   pub fn set_nametable_select(&mut self, val: u8) {
     let nametable_select = val & 0b11;
 
-    self.t = (self.t & !(0b000_11_00000_00000)) | ((nametable_select & 0b11) as u16) << 10;
+    self.t = (self.t & !(0b000_11_00000_00000)) | ((nametable_select as u16) << 10);
   }
 
   pub fn set_address(&mut self, val: u8) {
     if !self.latch {
       // write to high address
-      self.t = (self.t & 0xff) | (val as u16 & 0b111111) << 8;
+      self.t = (self.t & 0xff) | ((val as u16 & 0b111111) << 8);
     } else {
       // write to low address
       let high_bits = self.t >> 8;
-      self.t = high_bits << 8 | val as u16;
+      self.t = (high_bits << 8) | val as u16;
 
       self.v = self.t & 0x3fff;
     }
@@ -107,7 +107,7 @@ impl ScrollRegister {
     // coarse x is 31, wrap around
     if (self.v & 0b11111) == 31 {
       self.v &= !(0b11111); // clear coarse x
-      self.v ^= 0x400;
+      self.v ^= 0x400; // switch nametable
     } else {
       self.v += 1;
     }
@@ -116,7 +116,7 @@ impl ScrollRegister {
   // see above
   pub fn increment_y(&mut self) {
     // if fine y is less than 7
-    if self.v & 0x7000 != 0x7000 {
+    if (self.v & 0x7000) != 0x7000 {
       self.v += 0x1000; // increment fine y
     } else {
       self.v &= !(0x7000);

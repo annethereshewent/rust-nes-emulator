@@ -383,7 +383,7 @@ impl PPU {
                 while self.oam_m < 4 {
                   self.oam_read = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
 
-                  self.oam_m = (  self.oam_m + 1) % 4;
+                  self.oam_m = (self.oam_m + 1) % 4;
                 }
               } else {
                 self.oam_n = (self.oam_n + 1) % 64;
@@ -542,7 +542,7 @@ impl PPU {
     if matches!(self.cycles, 1..=256) && self.current_scanline < SCREEN_HEIGHT {
       self.draw_pixel();
     }
-    if matches!(self.cycles, 1..=256) {
+    if matches!(self.cycles, 1..=256) || matches!(self.cycles, 321..=336) {
       self.tile_shift_high <<= 1;
       self.tile_shift_low <<= 1;
     }
