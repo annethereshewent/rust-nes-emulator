@@ -318,7 +318,6 @@ impl PPU {
       self.current_scanline += 1;
 
       if self.current_scanline == SCREEN_HEIGHT+1 {
-        self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
         self.status.insert(StatusRegister::VBLANK_STARTED);
         if self.ctrl.generate_nmi_interrupt() {
           self.nmi_triggered = true;
