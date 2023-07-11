@@ -625,14 +625,7 @@ impl PPU {
 
     let mut rgb: Option<(u8, u8, u8)> = None;
 
-
-
     if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped && self.sprites_present[x as usize] {
-      // the culprit seems to be pixel/cycle number 64
-      if y > 200 && x == 64 && self.sprite_count == 0 {
-        println!("found the no man's land");
-      }
-
       for i in 0..self.sprite_count {
         let sprite = &self.sprites[i as usize];
 
