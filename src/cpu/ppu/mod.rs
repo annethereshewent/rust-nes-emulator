@@ -325,7 +325,6 @@ impl PPU {
       }
 
       if self.current_scanline >= SCANLINES_PER_FRAME {
-        // self.render();
         self.current_scanline = 0;
         self.nmi_triggered = false;
         self.status.remove(StatusRegister::VBLANK_STARTED);
@@ -348,8 +347,8 @@ impl PPU {
         if self.cycles == 65 {
           self.sprite_in_range = false;
           self.secondary_oam_address = 0;
-          self.oam_n = (self.oam_address / 4) % 64;
-          self.oam_m = self.oam_address % 4;
+          self.oam_n = 0;
+          self.oam_m = 0;
           self.sprite_zero_in_range = false;
           self.evaluation_done = false;
         } else if self.cycles == 256 {
@@ -358,7 +357,7 @@ impl PPU {
         }
 
         if self.cycles % 2 == 1 {
-          self.oam_read = self.oam_data[self.oam_address as usize];
+          self.oam_read = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
         } else {
           if self.evaluation_done {
             self.oam_n = (self.oam_n + 1) % 64;
@@ -372,7 +371,7 @@ impl PPU {
 
               let sprite_height = self.ctrl.sprite_size() as u16;
 
-              if !self.sprite_in_range && (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
+              if (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
                 self.sprite_in_range = true;
               }
             }
@@ -441,7 +440,6 @@ impl PPU {
               }
             }
           }
-          self.oam_address = (self.oam_n * 4) + self.oam_m;
         }
       },
       _ => ()
@@ -449,11 +447,10 @@ impl PPU {
   }
 
   fn fetch_sprites(&mut self) {
-    self.write_to_oam_address(0);
-
     // this is actually an approximation but should be good enough
    if (self.cycles % 8) == 4 {
       let index = (self.cycles - OAM_FETCH_START) / 8;
+
       let oam_index = index * 4;
 
       let y = self.secondary_oam[oam_index as usize];
@@ -511,7 +508,7 @@ impl PPU {
           }
         }
       }
-   }
+    }
   }
 
   fn fetch_attribute_byte(&mut self) {
@@ -568,10 +565,10 @@ impl PPU {
         }
 
         match self.cycles {
-          1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
-            let address = (self.cycles - 1) as usize;
-            self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
-          },
+          // 1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
+          //   let address = (self.cycles - 1) as usize;
+          //   self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
+          // },
           256 => self.scroll.increment_y(),
           257 => self.scroll.copy_x(),
           280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
