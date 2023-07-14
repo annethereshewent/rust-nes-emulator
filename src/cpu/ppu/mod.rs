@@ -565,10 +565,10 @@ impl PPU {
         }
 
         match self.cycles {
-          // 1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
-          //   let address = (self.cycles - 1) as usize;
-          //   self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
-          // },
+          1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
+            let address = (self.cycles - 1) as usize;
+            self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
+          },
           256 => self.scroll.increment_y(),
           257 => self.scroll.copy_x(),
           280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
