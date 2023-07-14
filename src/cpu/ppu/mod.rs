@@ -217,7 +217,7 @@ impl Sprite {
       x_flip: false,
       y_flip: false,
       tile_high: 0,
-      tile_low: 0,
+      tile_low: 0
     }
   }
 }
@@ -262,7 +262,8 @@ pub struct PPU {
   overflow_count: u8,
   evaluation_done: bool,
   tile_shift_high: u16,
-  tile_shift_low: u16
+  tile_shift_low: u16,
+  background_pixels_drawn: Vec<bool>
 }
 
 impl PPU {
@@ -307,7 +308,8 @@ impl PPU {
       overflow_count: 0,
       tile_shift_high: 0,
       tile_shift_low: 0,
-      sprite_count: 0
+      sprite_count: 0,
+      background_pixels_drawn: Vec::new()
     }
   }
 
@@ -315,7 +317,12 @@ impl PPU {
     if self.cycles >= CYCLES_PER_SCANLINE {
       self.cycles -= CYCLES_PER_SCANLINE;
 
+      if self.current_scanline < SCREEN_HEIGHT {
+        self.draw_sprites();
+      }
+
       self.current_scanline += 1;
+      self.background_pixels_drawn = Vec::new();
 
       if self.current_scanline == SCREEN_HEIGHT+1 {
         self.status.insert(StatusRegister::VBLANK_STARTED);
@@ -536,13 +543,97 @@ impl PPU {
 
     self.tile_address = tile_index + self.scroll.fine_y();
   }
+  fn draw_sprites(&mut self) {
+    let y = self.current_scanline;
+
+    for i in (0..self.oam_data.len()).step_by(4) {
+      let tile_y = self.oam_data[i];
+      let mut tile_number = self.oam_data[i+1];
+      let attributes = self.oam_data[i+2];
+      let tile_x = self.oam_data[i+3];
+
+      let y_flip = (attributes >> 7) & 0b1 == 1;
+      let x_flip = (attributes >> 6) & 0b1 == 1;
+
+      let sprite_behind_background = (attributes >> 5) & 0b1 == 1;
+
+      let mut y_pos_in_tile: i16 = (y as i16) - (tile_y as i16);
+
+      if y_flip {
+        y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
+      }
+
+      if y_pos_in_tile >= 0 && (y_pos_in_tile as u16) < self.ctrl.sprite_size() as u16 {
+        let palette_index = attributes & 0b11;
+
+        let sprite_palettes = self.get_sprite_palette(palette_index);
+
+
+        let mut y_index = y_pos_in_tile;
+
+        let bank = if self.ctrl.sprite_size() == 8 {
+          self.ctrl.sprite_pattern_table_address()
+        } else {
+          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
+          tile_number = tile_number & 0b11111110;
+
+          if y_pos_in_tile > 7 {
+            y_index += 8;
+          }
+
+          bank
+        };
+
+        let tile_index = bank + tile_number as u16 * 16;
+
+        let lower_byte = self.read_chr(tile_index + y_index as u16);
+        let upper_byte = self.read_chr(tile_index + y_index as u16 + 8);
+
+        for x in 0..8 {
+          let bit_pos = if x_flip {
+            x
+          } else {
+            7 - x
+          };
+
+          let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
+
+          let rgb = match color_index {
+            0 => continue,
+            _ => PALETTE_TABLE[sprite_palettes[color_index as usize] as usize]
+          };
+
+          let x_pos = (tile_x as usize + x) as usize;
+
+          if x_pos >= SCREEN_WIDTH as usize || x_pos < 0 as usize {
+            continue;
+          }
+
+          if i == 0
+            && color_index != 0
+            && x != 255
+            && self.rendering_enabled()
+            && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
+            self.status.set(StatusRegister::SPRITE_ZERO_HIT, true);
+          }
+
+          let is_pixel_visible = !(sprite_behind_background && self.background_pixels_drawn[x_pos]);
+
+          if is_pixel_visible {
+            self.picture.set_pixel(x_pos, y as usize, rgb);
+          }
+        }
+
+      }
+    }
+  }
 
   fn cycle(&mut self) {
     if self.rendering_enabled() {
       if self.current_scanline < SCREEN_HEIGHT {
         // do sprite evaluation only for visible scanlines
         if matches!(self.cycles, 1..=256) {
-          self.evaluate_sprites()
+          // self.evaluate_sprites()
         }
       }
 
@@ -565,10 +656,10 @@ impl PPU {
         }
 
         match self.cycles {
-          1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
-            let address = (self.cycles - 1) as usize;
-            self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
-          },
+          // 1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
+          //   let address = (self.cycles - 1) as usize;
+          //   self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
+          // },
           256 => self.scroll.increment_y(),
           257 => self.scroll.copy_x(),
           280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
@@ -580,7 +671,7 @@ impl PPU {
           if self.cycles == 257 {
             self.sprites_present.fill(false);
           }
-          self.fetch_sprites();
+          // self.fetch_sprites();
         }
 
         if matches!(self.cycles, 321..=340) {
@@ -598,10 +689,10 @@ impl PPU {
       self.tile_shift_high <<= 1;
       self.tile_shift_low <<= 1;
     }
-
   }
 
   pub fn draw_pixel(&mut self) {
+
     let x = self.cycles - 1;
     let y = self.current_scanline;
 
@@ -614,58 +705,21 @@ impl PPU {
       0
     };
 
-    let is_left_sprite_clipped = x < 8 && !self.mask.contains(MaskRegister::SHOW_SPRITES_LEFTMOST);
-
-    let mut rgb: Option<(u8, u8, u8)> = None;
-
-    if self.mask.contains(MaskRegister::SHOW_SPRITES) && !is_left_sprite_clipped && self.sprites_present[x as usize] {
-      for i in 0..self.sprite_count {
-        let sprite = &self.sprites[i as usize];
-
-        let mut bit_pos = x as i16 - sprite.x as i16;
-
-        if !sprite.x_flip {
-          bit_pos = 7 - bit_pos;
-        }
-
-        if (0..8).contains(&bit_pos) {
-          let color_index = ((sprite.tile_low >> bit_pos) & 0b1) + (((sprite.tile_high >> bit_pos) & 0b1) << 1);
-          if i == 0
-            && color_index != 0
-            && self.sprite_zero_found
-            && x != 255
-            && self.rendering_enabled()
-            && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
-            self.status.insert(StatusRegister::SPRITE_ZERO_HIT);
-          }
-
-          rgb = if color_index != 0 && (bg_color == 0 || !sprite.sprite_behind_background) {
-            let palette_index = sprite.palette[color_index as usize];
-            Some(PALETTE_TABLE[palette_index as usize])
-          } else {
-            None
-          };
-        }
-      }
-    }
-
-    let actual_rgb = if let Some(rgb) = rgb {
-      rgb
+    let palette_search = if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
+      self.previous_palette
     } else {
-      let palette_search = if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
-        self.previous_palette
-      } else {
-        self.current_palette
-      };
-
-      let palette = self.get_bg_palette(palette_search as usize);
-
-      let palette_index = palette[bg_color as usize];
-
-      PALETTE_TABLE[palette_index as usize]
+      self.current_palette
     };
 
-    self.picture.set_pixel(x as usize, y as usize, actual_rgb);
+    let palette = self.get_bg_palette(palette_search as usize);
+
+    let palette_index = palette[bg_color as usize];
+
+    let rgb = PALETTE_TABLE[palette_index as usize];
+
+    self.background_pixels_drawn.push(bg_color != 0);
+
+    self.picture.set_pixel(x as usize, y as usize, rgb);
   }
 
   pub fn update_mirroring(&mut self) {
