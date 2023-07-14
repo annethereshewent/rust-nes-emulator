@@ -2,6 +2,7 @@ pub mod registers;
 pub mod picture;
 pub mod joypad;
 
+use std::cmp::Ordering;
 use std::thread::sleep;
 use std::time::{Duration, UNIX_EPOCH, SystemTime};
 
@@ -10,7 +11,6 @@ use registers::mask::MaskRegister;
 use registers::scroll::ScrollRegister;
 use registers::status::StatusRegister;
 use self::joypad::Joypad;
-use self::registers::address::AddressRegister;
 
 use picture::Picture;
 
@@ -27,6 +27,11 @@ pub const SCREEN_WIDTH: u16 = 256;
 
 const MAX_FPS: u32 = 60;
 pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
+
+const PRERENDER_SCANLINE: u16 = 261;
+
+const OAM_FETCH_START: u16 = 257;
+
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
@@ -189,17 +194,45 @@ const PALETTE_TABLE: [(u8, u8, u8); 64] = [
 //   (0,0,0)
 // ];
 
+#[derive(Copy, Clone)]
+struct Sprite {
+  x: u8,
+  y: u8,
+  palette: [u8; 4],
+  sprite_behind_background: bool,
+  x_flip: bool,
+  y_flip: bool,
+  tile_high: u8,
+  tile_low: u8
+}
+
+
+impl Sprite {
+  pub fn new() -> Self {
+    Self {
+      x: 0,
+      y: 0,
+      palette: [0; 4],
+      sprite_behind_background: false,
+      x_flip: false,
+      y_flip: false,
+      tile_high: 0,
+      tile_low: 0
+    }
+  }
+}
+
 pub struct PPU {
   ctrl: ControlRegister,
   mask: MaskRegister,
   scroll: ScrollRegister,
   status: StatusRegister,
-  ppu_addr: AddressRegister,
   pub palette_table: [u8; 32],
   pub chr_rom: Vec<u8>,
   pub chr_ram: Vec<u8>,
   pub vram: [u8; 2048],
   pub oam_data: [u8; 256],
+  secondary_oam: [u8; 32],
   pub oam_address: u8,
   pub mirroring: Mirroring,
   internal_data: u8,
@@ -208,9 +241,29 @@ pub struct PPU {
   pub nmi_triggered: bool,
   pub picture: Picture,
   pub joypad: Joypad,
-  background_pixels_drawn: Vec<bool>,
   previous_time: u128,
-  pub mapper: Mapper
+  pub mapper: Mapper,
+  previous_palette: u8,
+  current_palette: u8,
+  next_palette: u8,
+  tile_low: u8,
+  tile_high: u8,
+  tile_address: u16,
+  oam_read: u8,
+  secondary_oam_address: u8,
+  oam_n: u8,
+  oam_m: u8,
+  sprites: [Sprite; 8],
+  sprite_zero_found: bool,
+  sprite_in_range: bool,
+  sprite_zero_in_range: bool,
+  sprites_present: [bool; 256],
+  sprite_count: u8,
+  overflow_count: u8,
+  evaluation_done: bool,
+  tile_shift_high: u16,
+  tile_shift_low: u16,
+  background_pixels_drawn: Vec<bool>
 }
 
 impl PPU {
@@ -220,10 +273,10 @@ impl PPU {
       mask: MaskRegister::from_bits_truncate(0b00000000),
       scroll: ScrollRegister::new(),
       status: StatusRegister::from_bits_truncate(0b00000000),
-      ppu_addr: AddressRegister::new(),
       chr_rom,
       chr_ram,
       oam_data: [0; 256],
+      secondary_oam: [0; 32],
       oam_address: 0,
       vram: [0; 2048],
       mirroring,
@@ -234,25 +287,44 @@ impl PPU {
       nmi_triggered: false,
       picture: Picture::new(),
       joypad: Joypad::new(),
-      background_pixels_drawn: Vec::new(),
       previous_time: 0,
-      mapper: Mapper::Empty(Empty {})
+      mapper: Mapper::Empty(Empty {}),
+      previous_palette: 0,
+      current_palette: 0,
+      next_palette: 0,
+      tile_low: 0,
+      tile_high: 0,
+      tile_address: 0,
+      oam_read: 0,
+      oam_m: 0,
+      oam_n: 0,
+      secondary_oam_address: 0,
+      sprites: [Sprite::new(); 8],
+      sprite_zero_found: false,
+      sprite_zero_in_range: false,
+      sprite_in_range: false,
+      sprites_present: [false; 256],
+      evaluation_done: false,
+      overflow_count: 0,
+      tile_shift_high: 0,
+      tile_shift_low: 0,
+      sprite_count: 0,
+      background_pixels_drawn: Vec::new()
     }
   }
 
-  pub fn tick(&mut self, cycles: u16) {
-    self.cycles += cycles;
-
+  pub fn tick(&mut self) {
     if self.cycles >= CYCLES_PER_SCANLINE {
-      if self.current_scanline < SCREEN_HEIGHT {
-        self.draw_line();
-      }
       self.cycles -= CYCLES_PER_SCANLINE;
 
+      if self.current_scanline < SCREEN_HEIGHT {
+        self.draw_sprites();
+      }
+
       self.current_scanline += 1;
+      self.background_pixels_drawn = Vec::new();
 
       if self.current_scanline == SCREEN_HEIGHT+1 {
-        self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
         self.status.insert(StatusRegister::VBLANK_STARTED);
         if self.ctrl.generate_nmi_interrupt() {
           self.nmi_triggered = true;
@@ -260,106 +332,217 @@ impl PPU {
       }
 
       if self.current_scanline >= SCANLINES_PER_FRAME {
-        // self.render();
         self.current_scanline = 0;
         self.nmi_triggered = false;
         self.status.remove(StatusRegister::VBLANK_STARTED);
         self.status.remove(StatusRegister::SPRITE_ZERO_HIT);
       }
-    }
-  }
-
-  pub fn update_mirroring(&mut self) {
-    if !matches!(self.mapper, Mapper::Empty(_)) {
-      self.mirroring = self.mapper.mirroring()
-    }
-  }
-
-  pub fn cap_fps(&mut self) {
-    let current_time = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .expect("an error occurred")
-      .as_millis();
-
-    if self.previous_time != 0 {
-      let diff = current_time - self.previous_time;
-      if diff < FPS_INTERVAL as u128 {
-        // sleep for the missing time
-        sleep(Duration::from_millis((FPS_INTERVAL - diff as u32) as u64));
-      }
-    }
-
-    self.previous_time = SystemTime::now()
-      .duration_since(UNIX_EPOCH)
-      .expect("an error occurred")
-      .as_millis();
-  }
-
-  // see https://www.nesdev.org/wiki/Mirroring
-  fn mirror_vram_index(&self, address: u16) -> u16 {
-    let mirrored_address = address & 0b10111111111111; // mirror down address to range 0x2000 to 0x2eff, where nametables exist
-    let vram_index = mirrored_address - 0x2000;
-    let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what nametable is being referred to
-
-    match (&self.mirroring, name_table_index) {
-      (Mirroring::SingleScreenA, 3) => vram_index - 0xc00,
-      (Mirroring::SingleScreenB, 0) => vram_index + 0x400,
-      (Mirroring::Horizontal, 1)
-        | (Mirroring::Horizontal, 2)
-        | (Mirroring::SingleScreenA, 1)
-        | (Mirroring::SingleScreenB, 2) => vram_index - 0x400, // for horizontal, 1 is in first kb of memory, 2 is in 2nd kb of memory.
-      (Mirroring::Vertical, 2)
-        | (Mirroring::Vertical, 3)
-        | (Mirroring::Horizontal, 3)
-        | (Mirroring::SingleScreenB, 3)
-        | (Mirroring::SingleScreenA, 2) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd for vertical. 3 is in 2nd for horizontal.
-      _ => vram_index // either it's four screen which has no mirroring or it's nametable 0 or another nametable that doesn't need the offset
-    }
-  }
-
-  pub fn read_status_register(&mut self) -> u8 {
-    let data = self.status.bits();
-
-    self.scroll.latch = false;
-    self.ppu_addr.latch = false;
-    self.status.set(StatusRegister::VBLANK_STARTED, false);
-
-    data
-  }
-
-  fn draw_line(&mut self) {
-    self.background_pixels_drawn = Vec::new();
-    self.draw_background();
-    self.draw_sprites();
-  }
-
-  fn sprite_zero_hit(&self, i: usize, x: usize) -> bool {
-    !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) &&
-    i == 0 &&
-    x != 255 &&
-    self.mask.contains(MaskRegister::SHOW_SPRITES)
-  }
-
-  fn read_chr(&mut self, address: u16) -> u8 {
-
-    let chr = if !self.chr_rom.is_empty() {
-      &self.chr_rom
     } else {
-      &self.chr_ram
-    };
+      self.cycle();
+    }
+    self.cycles += 1;
+  }
 
-    match &mut self.mapper {
-      Mapper::Empty(_) => chr[address as usize],
-      _ => {
-        if let Some(mapped_address) = self.mapper.mem_read(address) {
-          chr[mapped_address]
+  fn evaluate_sprites(&mut self) {
+    match self.cycles {
+      1..=64 => {
+        // set secondary oam data to ff
+        self.secondary_oam.fill(0xff);
+        self.oam_read = 0xff;
+      }
+      65..=256 => {
+        if self.cycles == 65 {
+          self.sprite_in_range = false;
+          self.secondary_oam_address = 0;
+          self.oam_n = 0;
+          self.oam_m = 0;
+          self.sprite_zero_in_range = false;
+          self.evaluation_done = false;
+        } else if self.cycles == 256 {
+          self.sprite_zero_found = self.sprite_zero_in_range;
+          self.sprite_count = self.secondary_oam_address / 4;
+        }
+
+        if self.cycles % 2 == 1 {
+          self.oam_read = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
         } else {
-          0
+          if self.evaluation_done {
+            self.oam_n = (self.oam_n + 1) % 64;
+
+            if (self.secondary_oam_address as usize) >= self.secondary_oam.len() {
+              self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
+            }
+          } else {
+            if self.oam_m == 0 {
+              let y_coordinate = self.oam_read as u16;
+
+              let sprite_height = self.ctrl.sprite_size() as u16;
+
+              if (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
+                self.sprite_in_range = true;
+              }
+            }
+
+            // if 8 sprites haven't been found yet
+            if (self.secondary_oam_address as usize) < self.secondary_oam.len() {
+              self.secondary_oam[self.secondary_oam_address as usize] = self.oam_read;
+
+              if self.sprite_in_range {
+                self.oam_m += 1;
+                self.secondary_oam_address += 1;
+
+                if self.oam_n == 0 {
+                  self.sprite_zero_in_range = true;
+                }
+
+                if self.oam_m == 4 {
+                  self.sprite_in_range = false;
+
+                  self.oam_m = 0;
+                  self.oam_n = (self.oam_n + 1) % 64;
+
+                  if self.oam_n == 0 {
+                    self.evaluation_done = true;
+                  }
+                }
+              } else {
+                self.oam_n = (self.oam_n + 1) % 64;
+                if self.oam_n == 0 {
+                  self.evaluation_done = true;
+                }
+              }
+            } else {
+              self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
+
+              if self.sprite_in_range {
+                self.status.insert(StatusRegister::SPRITE_OVERFLOW);
+
+                self.oam_m += 1;
+
+                if self.oam_m == 4 {
+                  self.oam_m = 0;
+                  self.oam_n = (self.oam_n + 1) % 64;
+
+                  match self.overflow_count.cmp(&0) {
+                    Ordering::Equal => {
+                      self.overflow_count = 3;
+                    },
+                    Ordering::Greater => {
+                      self.overflow_count -= 1;
+                      if self.overflow_count == 0 {
+                        self.evaluation_done = true;
+                        self.oam_m = 0;
+                      }
+                    },
+                    Ordering::Less => ()
+                  }
+                }
+              } else {
+                self.oam_n = (self.oam_n + 1) % 64;
+                self.oam_m = (self.oam_m + 1) % 4;
+
+                if self.oam_n == 0 {
+                  self.evaluation_done = true;
+                }
+              }
+            }
+          }
+        }
+      },
+      _ => ()
+    }
+  }
+
+  fn fetch_sprites(&mut self) {
+    // this is actually an approximation but should be good enough
+   if (self.cycles % 8) == 4 {
+      let index = (self.cycles - OAM_FETCH_START) / 8;
+
+      let oam_index = index * 4;
+
+      let y = self.secondary_oam[oam_index as usize];
+      let mut tile_number = self.secondary_oam[(oam_index+1) as usize];
+      let attributes = self.secondary_oam[(oam_index+2) as usize];
+      let x = self.secondary_oam[(oam_index+3) as usize];
+
+      let palette_index = attributes & 0b11;
+
+      let palette = self.get_sprite_palette(palette_index);
+
+      let mut y_pos_in_tile = (self.current_scanline as i16) - (y as i16);
+
+      let y_flip = (attributes >> 7) & 0b1 == 1;
+      let x_flip = (attributes >> 6) & 0b1 == 1;
+
+      let sprite_behind_background = (attributes >> 5) & 0b1 == 1;
+
+      if y_flip {
+        y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
+      }
+
+      if y_pos_in_tile >= 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
+        let bank = if self.ctrl.sprite_size() == 8 {
+          self.ctrl.sprite_pattern_table_address()
+        } else {
+          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
+          tile_number = tile_number & 0b11111110;
+
+          if y_pos_in_tile > 7 {
+            y_pos_in_tile += 8;
+          }
+          bank
+        };
+
+        let tile_index = bank + tile_number as u16 * 16;
+
+        let tile_low = self.read_chr(tile_index + y_pos_in_tile as u16);
+        let tile_high = self.read_chr(tile_index + y_pos_in_tile as u16 + 8);
+
+        if index < self.sprite_count as u16 {
+          let mut sprite = &mut self.sprites[index as usize];
+
+          sprite.x_flip = x_flip;
+          sprite.y_flip = y_flip;
+          sprite.sprite_behind_background = sprite_behind_background;
+          sprite.tile_high = tile_high;
+          sprite.tile_low = tile_low;
+          sprite.palette = palette;
+          sprite.x = x;
+          sprite.y = y;
+
+          for spr in self.sprites_present.iter_mut().skip(sprite.x as usize).take(8) {
+            *spr = true;
+          }
         }
       }
     }
   }
 
+  fn fetch_attribute_byte(&mut self) {
+    let attribute_address = self.scroll.attribute_address();
+
+    let attribute_byte = self.vram[self.mirror_vram_index(attribute_address) as usize];
+    let shift = self.scroll.attribute_shift();
+
+    self.next_palette = 1 + ((attribute_byte >> shift) & 0b11) * 4;
+  }
+
+  fn fetch_nametable_byte(&mut self) {
+    let address = self.scroll.tile_address();
+
+    self.previous_palette = self.current_palette;
+    self.current_palette = self.next_palette;
+
+    let tile_number = self.vram[self.mirror_vram_index(address) as usize];
+    let bank = self.ctrl.background_pattern_table_addr();
+
+    self.tile_shift_low |= self.tile_low as u16;
+    self.tile_shift_high |= self.tile_high as u16;
+
+    let tile_index = bank + (tile_number as u16) * 16;
+
+    self.tile_address = tile_index + self.scroll.fine_y();
+  }
   fn draw_sprites(&mut self) {
     let y = self.current_scanline;
 
@@ -426,7 +609,11 @@ impl PPU {
             continue;
           }
 
-          if self.sprite_zero_hit(i, x_pos) {
+          if i == 0
+            && color_index != 0
+            && x != 255
+            && self.rendering_enabled()
+            && !self.status.contains(StatusRegister::SPRITE_ZERO_HIT) {
             self.status.set(StatusRegister::SPRITE_ZERO_HIT, true);
           }
 
@@ -441,84 +628,174 @@ impl PPU {
     }
   }
 
-  fn draw_background(&mut self) {
-    let nametable_base = self.ctrl.base_table_address();
+  fn cycle(&mut self) {
+    if self.rendering_enabled() {
+      if self.current_scanline < SCREEN_HEIGHT {
+        // do sprite evaluation only for visible scanlines
+        if matches!(self.cycles, 1..=256) {
+          // self.evaluate_sprites()
+        }
+      }
 
-    let second_nametable_base = match (nametable_base, &self.mirroring) {
-      (0x2000, Mirroring::Vertical) | (0x2800, Mirroring::Vertical) => 0x2400,
-      (0x2400, Mirroring::Vertical) | (0x2c00, Mirroring::Vertical) | (0x2800, Mirroring::Horizontal) | (0x2c00, Mirroring::Horizontal) => 0x2000,
-      (0x2400, Mirroring::Horizontal) | (0x2000, Mirroring::Horizontal)  => 0x2800,
-      (_, Mirroring::SingleScreenA) => 0x2000,
-      (_, Mirroring::SingleScreenB) => 0x2400,
-      _ => todo!("mirroring mode not implemented")
-    };
+      if self.current_scanline < SCREEN_HEIGHT || self.current_scanline == PRERENDER_SCANLINE {
+        if matches!(self.cycles, 1..=256) || matches!(self.cycles, 321..=336) {
+          // fetch nametable byte, attribute byte, pattern table high and low bytes
+          match self.cycles % 8 {
+            1 => self.fetch_nametable_byte(),
+            3 => self.fetch_attribute_byte(),
+            5 => self.tile_low = self.read_chr(self.tile_address),
+            7 => self.tile_high = self.read_chr(self.tile_address + 8),
+            _ => ()
+          }
 
-    let chr_rom_bank = self.ctrl.background_pattern_table_addr();
+          if self.cycles % 8 == 0 {
+            self.scroll.increment_x();
+          }
+        } else if matches!(self.cycles, 337..=340) {
+          self.fetch_nametable_byte();
+        }
 
+        match self.cycles {
+          // 1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
+          //   let address = (self.cycles - 1) as usize;
+          //   self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
+          // },
+          256 => self.scroll.increment_y(),
+          257 => self.scroll.copy_x(),
+          280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
+          _ => ()
+        }
+
+        if matches!(self.cycles, 257..=320) {
+          // fetch sprites for next scanline
+          if self.cycles == 257 {
+            self.sprites_present.fill(false);
+          }
+          // self.fetch_sprites();
+        }
+
+        if matches!(self.cycles, 321..=340) {
+          // sprite dummy cycle...
+          self.oam_read = self.secondary_oam[0];
+        }
+      }
+    }
+
+    // finally render the pixel
+    if matches!(self.cycles, 1..=256) && self.current_scanline < SCREEN_HEIGHT {
+      self.draw_pixel();
+    }
+    if matches!(self.cycles, 1..=256) || matches!(self.cycles, 321..=336) {
+      self.tile_shift_high <<= 1;
+      self.tile_shift_low <<= 1;
+    }
+  }
+
+  pub fn draw_pixel(&mut self) {
+
+    let x = self.cycles - 1;
     let y = self.current_scanline;
 
-    // let mut scrolled_y = y;
+    let is_left_bg_clipped = x < 8 && !self.mask.contains(MaskRegister::SHOW_BACKGROUND_LEFTMOST);
 
-    for x in 0..SCREEN_WIDTH {
-      let mut scrolled_x = x + self.scroll.x as u16;
-      let mut scrolled_y = self.scroll.y as u16 + y;
+    let bg_color = if self.mask.contains(MaskRegister::SHOW_BACKGROUND) && !is_left_bg_clipped {
+      let offset = self.scroll.fine_x();
+      (((self.tile_shift_high << offset) & 0x8000) >> 14) + (((self.tile_shift_low << offset) & 0x8000) >> 15)
+    } else {
+      0
+    };
 
-      let current_nametable = match &self.mirroring {
-        Mirroring::Vertical => {
-          if scrolled_x < SCREEN_WIDTH {
-            nametable_base
-          } else {
-            scrolled_x %= SCREEN_WIDTH;
-            second_nametable_base
-          }
+    let palette_search = if (self.scroll.fine_x() + (x as u8 % 8)) < 8 {
+      self.previous_palette
+    } else {
+      self.current_palette
+    };
+
+    let palette = self.get_bg_palette(palette_search as usize);
+
+    let palette_index = palette[bg_color as usize];
+
+    let rgb = PALETTE_TABLE[palette_index as usize];
+
+    self.background_pixels_drawn.push(bg_color != 0);
+
+    self.picture.set_pixel(x as usize, y as usize, rgb);
+  }
+
+  pub fn update_mirroring(&mut self) {
+    if !matches!(self.mapper, Mapper::Empty(_)) {
+      self.mirroring = self.mapper.mirroring()
+    }
+  }
+
+  pub fn cap_fps(&mut self) {
+    let current_time = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("an error occurred")
+      .as_millis();
+
+    if self.previous_time != 0 {
+      let diff = current_time - self.previous_time;
+      if diff < FPS_INTERVAL as u128 {
+        // sleep for the missing time
+        sleep(Duration::from_millis((FPS_INTERVAL - diff as u32) as u64));
+      }
+    }
+
+    self.previous_time = SystemTime::now()
+      .duration_since(UNIX_EPOCH)
+      .expect("an error occurred")
+      .as_millis();
+  }
+
+  // see https://www.nesdev.org/wiki/Mirroring
+  fn mirror_vram_index(&self, address: u16) -> u16 {
+    let mirrored_address = address & 0b10111111111111; // mirror down address to range 0x2000 to 0x2eff, where nametables exist
+    let vram_index = mirrored_address - 0x2000;
+    let name_table_index = vram_index / 0x400; // this should give us a value between 0-3 which points to what nametable is being referred to
+
+    match (&self.mirroring, name_table_index) {
+      (Mirroring::SingleScreenA, 3) => vram_index - 0xc00,
+      (Mirroring::SingleScreenB, 0) => vram_index + 0x400,
+      (Mirroring::Horizontal, 1)
+        | (Mirroring::Horizontal, 2)
+        | (Mirroring::SingleScreenA, 1)
+        | (Mirroring::SingleScreenB, 2) => vram_index - 0x400, // for horizontal, 1 is in first kb of memory, 2 is in 2nd kb of memory.
+      (Mirroring::Vertical, 2)
+        | (Mirroring::Vertical, 3)
+        | (Mirroring::Horizontal, 3)
+        | (Mirroring::SingleScreenB, 3)
+        | (Mirroring::SingleScreenA, 2) => vram_index- 0x800, // 2 is in first kb of memory 3 is in 2nd for vertical. 3 is in 2nd for horizontal.
+      _ => vram_index // either it's four screen which has no mirroring or it's nametable 0 or another nametable that doesn't need the offset
+    }
+  }
+
+  pub fn read_status_register(&mut self) -> u8 {
+    let data = self.status.bits();
+
+    self.scroll.latch = false;
+    self.status.set(StatusRegister::VBLANK_STARTED, false);
+
+    data
+  }
+
+  fn read_chr(&mut self, address: u16) -> u8 {
+
+    let chr = if !self.chr_rom.is_empty() {
+      &self.chr_rom
+    } else {
+      &self.chr_ram
+    };
+
+    match &mut self.mapper {
+      Mapper::Empty(_) => chr[address as usize],
+      _ => {
+        if let Some(mapped_address) = self.mapper.mem_read(address) {
+          chr[mapped_address]
+        } else {
+          0
         }
-        Mirroring::Horizontal => {
-          if scrolled_y < SCREEN_HEIGHT {
-            nametable_base
-          } else {
-            scrolled_y %= SCREEN_HEIGHT;
-            second_nametable_base
-          }
-        }
-        Mirroring::SingleScreenA | Mirroring::SingleScreenB => {
-          if scrolled_y >= SCREEN_HEIGHT {
-            scrolled_y %= SCREEN_HEIGHT;
-          }
-          if scrolled_x >= SCREEN_WIDTH {
-            scrolled_x %= SCREEN_WIDTH;
-          }
-          nametable_base
-        },
-        _ => todo!("four screen not implemented")
-      };
-
-      let tile_pos = (scrolled_x / 8) + (scrolled_y / 8) * 32;
-
-      let tile_number = self.vram[self.mirror_vram_index(current_nametable + tile_pos) as usize];
-
-      let tile_index = chr_rom_bank + (tile_number as u16 * 16);
-
-      let x_pos_in_tile = scrolled_x % 8;
-      let y_pos_in_tile = scrolled_y % 8;
-
-      let lower_byte = self.read_chr(tile_index + y_pos_in_tile);
-      let upper_byte = self.read_chr(tile_index + y_pos_in_tile + 8);
-
-      let bit_pos = 7 - x_pos_in_tile;
-
-      let color_index = ((lower_byte >> bit_pos) & 0b1) + (((upper_byte >> bit_pos) & 0b1) << 1);
-
-      let tile_column = scrolled_x / 8;
-      let tile_row = scrolled_y / 8;
-
-      let bg_palette = self.get_bg_palette(current_nametable as usize, tile_column as usize, tile_row as usize);
-
-      self.background_pixels_drawn.push(color_index != 0);
-
-      // finally render the pixel!
-      let rgb = PALETTE_TABLE[bg_palette[color_index as usize] as usize];
-      self.picture.set_pixel(x as usize, y as usize, rgb);
-
+      }
     }
   }
 
@@ -534,38 +811,16 @@ impl PPU {
     ]
   }
 
-  fn get_bg_palette(&self, nametable_base: usize, tile_column: usize, tile_row: usize) -> [u8; 4] {
-    // 1 byte in attribute table controls the palette for 4 neighboring meta-tiles, where a meta-tile is 2x2 tiles
-    // thus, 1 byte controls 4x4 tiles or 32x32 pixels total.
-    // so in order to get the index, divide the tile column position by 4, and the tile row position by 4 and multiply by 8
-    // (8 * 32 = 256, the screen width)
-    let attribute_table_index = (tile_row / 4) * 8 + (tile_column / 4);
-
-    let attr_byte = self.vram[self.mirror_vram_index((nametable_base + 0x3c0 + attribute_table_index) as u16) as usize];
-
-    let x_meta_tile_pos = (tile_column % 4) / 2;
-    let y_meta_tile_pos = (tile_row % 4) / 2;
-
-    // once you have the x,y coordinates within the 4 neighboring meta tiles, you can determine what two bits to use for the palette
-    // for instance, 0,0 is the top left meta-tile, 1,0 is the top right, and so on.
-    // the first two bits determine the first meta tile, 2nd 2 bits determine the 2nd, 3rd determine the 3rd, last two bits determine 4th tile
-    let palette_index = match (x_meta_tile_pos, y_meta_tile_pos) {
-      (0,0) => attr_byte & 0b11,
-      (1,0) => (attr_byte >> 2) & 0b11,
-      (0,1) => (attr_byte >> 4) & 0b11,
-      (1,1) => (attr_byte >> 6) & 0b11,
-      _ => panic!("should not get here")
-    };
-
-    // despite there being 3 colors per palette, after each palette an index is skipped, hence the * 4
-    // ie: palette 0 starts at 0x01 and ends at 0x03, but palette 1 doesn't start until 0x05
-    let palette_start: usize = 1 + (palette_index as usize * 4);
-
-    [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start+1], self.palette_table[palette_start+2]]
+  fn get_bg_palette(&self, palette_start: usize) -> [u8; 4] {
+    [self.palette_table[0], self.palette_table[palette_start], self.palette_table[palette_start + 1], self.palette_table[palette_start + 2]]
   }
 
   pub fn read_oam_data(&self) -> u8 {
-    self.oam_data[self.oam_address as usize]
+    if self.current_scanline < SCREEN_HEIGHT && self.rendering_enabled() && matches!(self.cycles, 257..=320) {
+      self.secondary_oam[self.secondary_oam_address as usize]
+    } else {
+      self.oam_data[self.oam_address as usize]
+    }
   }
 
   pub fn write_to_control(&mut self, value: u8) {
@@ -574,6 +829,7 @@ impl PPU {
     if !tmp && self.status.contains(StatusRegister::VBLANK_STARTED) && self.ctrl.generate_nmi_interrupt() {
       self.nmi_triggered = true;
     }
+    self.scroll.set_nametable_select(value);
   }
 
   pub fn write_to_mask(&mut self, value: u8) {
@@ -591,15 +847,15 @@ impl PPU {
   }
 
   pub fn write_to_scroll(&mut self, value: u8) {
-    self.scroll.set(value);
+    self.scroll.set_scroll(value);
   }
 
   pub fn write_to_ppu_address(&mut self, value: u8) {
-    self.ppu_addr.update(value);
+    self.scroll.set_address(value);
   }
 
   pub fn write_to_data(&mut self, value: u8) {
-    let address = self.ppu_addr.get();
+    let address = self.scroll.get_address();
 
     match address {
       0x0000 ..= 0x1fff => {
@@ -618,13 +874,26 @@ impl PPU {
 
     self.mapper.ppu_bus_write(address, value);
 
-    self.ppu_addr.increment(self.ctrl.vram_address_increment());
+    self.increment_address(self.ctrl.vram_address_increment());
+  }
+
+  fn increment_address(&mut self, val: u8) {
+    if self.rendering_enabled() && self.current_scanline < SCREEN_WIDTH && self.current_scanline == PRERENDER_SCANLINE {
+      self.scroll.increment_x();
+      self.scroll.increment_y();
+    } else {
+      self.scroll.increment_address(val);
+    }
+  }
+
+  fn rendering_enabled(&self) -> bool {
+    self.mask.contains(MaskRegister::SHOW_SPRITES) || self.mask.contains(MaskRegister::SHOW_BACKGROUND)
   }
 
   pub fn read_data(&mut self) -> u8 {
-    let address = self.ppu_addr.get();
+    let address = self.scroll.get_address();
 
-    self.ppu_addr.increment(self.ctrl.vram_address_increment());
+    self.increment_address(self.ctrl.vram_address_increment());
 
     match address {
       0x0000 ..= 0x1fff => {

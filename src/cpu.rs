@@ -346,8 +346,13 @@ impl CPU {
   pub fn cycle(&mut self, cycles: u16) {
     self.cycles += cycles;
     self.total_cycles = self.total_cycles.wrapping_add(cycles as u64);
-    self.ppu.tick(cycles * 3);
     self.apu.tick(cycles);
+
+    let ppu_cycles = cycles * 3;
+
+    for _ in 0..ppu_cycles {
+      self.ppu.tick();
+    }
 
     self.ppu.mapper.tick(cycles as u8);
   }

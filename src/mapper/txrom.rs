@@ -20,7 +20,7 @@ pub struct Txrom {
 
 struct TxromRegisters {
   bank_select: u8,
-  bank_data: u8,
+  bank_data: [u8; 8],
   irq_latch: u8,
   irq_counter: u8,
   irq_reload: bool,
@@ -49,7 +49,7 @@ impl Txrom {
       irq_pending: false,
       registers: TxromRegisters {
         bank_select: 0,
-        bank_data: 0,
+        bank_data: [0; 8],
         irq_latch: 0,
         irq_reload: false,
         irq_enable: false,
@@ -64,68 +64,29 @@ impl Txrom {
     txrom
   }
 
-  fn update_chr_banks(&mut self, mode: u8, bank_select: u8) {
-    let bank = self.registers.bank_data;
+  fn update_chr_banks(&mut self, mode: u8) {
     if mode == 1 {
-      match bank_select {
-        0 => {
-          // swap bank at 1000-17ff (2kb bank, bank indexes 4-5)
-          self.chr_banks[4] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-          self.chr_banks[5] = self.get_bank_address(bank + 1, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        1 => {
-          // 1800-1fff (2kb bank, bank indexes 6-7)
-          self.chr_banks[6] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-          self.chr_banks[7] = self.get_bank_address(bank + 1, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        2 => {
-          // 0000-03ff (1kb bank, bank index 0)
-          self.chr_banks[0] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        3 => {
-          // 0400-07ff (1kb bank, bank index 1)
-          self.chr_banks[1] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        4 => {
-          // 0800-0bff (1kb bank, bank index 2)
-          self.chr_banks[2] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        5 => {
-          // 0c00-0fff (1kb bank, bank index 3)
-          self.chr_banks[3] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        _ => panic!("not possible")
-      }
+      self.chr_banks[4] = self.get_bank_address(self.registers.bank_data[0], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[5] = self.get_bank_address(self.registers.bank_data[0] + 1, self.chr_page_size, CHR_BANK_SIZE);
+
+      self.chr_banks[6] = self.get_bank_address(self.registers.bank_data[1], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[7] = self.get_bank_address(self.registers.bank_data[1] + 1, self.chr_page_size, CHR_BANK_SIZE);
+
+      self.chr_banks[0] = self.get_bank_address(self.registers.bank_data[2], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[1] = self.get_bank_address(self.registers.bank_data[3], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[2] = self.get_bank_address(self.registers.bank_data[4], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[3] = self.get_bank_address(self.registers.bank_data[5], self.chr_page_size, CHR_BANK_SIZE);
     } else {
-      match bank_select {
-        0 => {
-          // 0000 - 07ff (2kb bank, bank indexes 0-1)
-          self.chr_banks[0] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-          self.chr_banks[1] = self.get_bank_address(bank + 1, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        1 => {
-          // 0800 - 0fff (2kb bank, bank indexes 2-3)
-          self.chr_banks[2] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-          self.chr_banks[3] = self.get_bank_address(bank + 1, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        2 => {
-          // 1000 - 13ff (1kb bank, bank index 4)
-          self.chr_banks[4] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        3 => {
-          // 1400 - 17ff (1kb bank, bank index 5)
-          self.chr_banks[5] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        4 => {
-          // 1800 - 1bff (1kb bank, bank index 6)
-          self.chr_banks[6] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        5 => {
-          // 1c00 - 1fff (1kb bank, bank index 7)
-          self.chr_banks[7] = self.get_bank_address(bank, self.chr_page_size, CHR_BANK_SIZE);
-        }
-        _ => panic!("not possible")
-      }
+      self.chr_banks[0] = self.get_bank_address(self.registers.bank_data[0], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[1] = self.get_bank_address(self.registers.bank_data[0] + 1, self.chr_page_size, CHR_BANK_SIZE);
+
+      self.chr_banks[2] = self.get_bank_address(self.registers.bank_data[1], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[3] = self.get_bank_address(self.registers.bank_data[1] + 1, self.chr_page_size, CHR_BANK_SIZE);
+
+      self.chr_banks[4] = self.get_bank_address(self.registers.bank_data[2], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[5] = self.get_bank_address(self.registers.bank_data[3], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[6] = self.get_bank_address(self.registers.bank_data[4], self.chr_page_size, CHR_BANK_SIZE);
+      self.chr_banks[7] = self.get_bank_address(self.registers.bank_data[5], self.chr_page_size, CHR_BANK_SIZE);
     }
   }
 
@@ -133,25 +94,22 @@ impl Txrom {
     (bank % page_size) as usize * bank_size
   }
 
-  fn update_prg_banks(&mut self, mode: u8, bank_select: u8) {
-    let bank = self.registers.bank_data;
+  fn update_prg_banks(&mut self, mode: u8) {
 
-    if bank_select == 7 {
-      // swap bank at a000-bfff (bank 2)
-      self.prg_rom_banks[1] = self.get_bank_address(bank, self.prg_page_size, PRG_ROM_BANK_SIZE);
+    // swap bank at a000-bfff (bank 2)
+    self.prg_rom_banks[1] = self.get_bank_address(self.registers.bank_data[7], self.prg_page_size, PRG_ROM_BANK_SIZE);
+    if mode == 0 {
+      // bank at 0x8000-9fff (bank 1) swappable,
+      self.prg_rom_banks[0] = self.get_bank_address(self.registers.bank_data[6], self.prg_page_size, PRG_ROM_BANK_SIZE);
+      // bank at c000-dfff (bank 3) fixed to second to last bank
+      self.prg_rom_banks[2] = self.get_bank_address(self.prg_page_size - 2, self.prg_page_size, PRG_ROM_BANK_SIZE);
     } else {
-      if mode == 0 {
-        // bank at 0x8000-9fff (bank 1) swappable,
-        self.prg_rom_banks[0] = self.get_bank_address(bank, self.prg_page_size, PRG_ROM_BANK_SIZE);
-        // bank at c000-dfff (bank 3) fixed to second to last bank
-        self.prg_rom_banks[2] = self.get_bank_address(self.prg_page_size - 2, self.prg_page_size, PRG_ROM_BANK_SIZE);
-      } else {
-        // c000-dfff (bank 3) swappable,
-        self.prg_rom_banks[2] = self.get_bank_address(bank, self.prg_page_size, PRG_ROM_BANK_SIZE);
-        // 8000-9fff (bank 1) fixed to second to last bank
-        self.prg_rom_banks[0] = self.get_bank_address(self.prg_page_size - 2, self.prg_page_size, PRG_ROM_BANK_SIZE);
-      }
+      // c000-dfff (bank 3) swappable,
+      self.prg_rom_banks[2] = self.get_bank_address(self.registers.bank_data[6], self.prg_page_size, PRG_ROM_BANK_SIZE);
+      // 8000-9fff (bank 1) fixed to second to last bank
+      self.prg_rom_banks[0] = self.get_bank_address(self.prg_page_size - 2, self.prg_page_size, PRG_ROM_BANK_SIZE);
     }
+
   }
 
   fn translate_address(&self, address: u16, bank_type: BankType) -> Option<usize> {
@@ -178,13 +136,9 @@ impl Txrom {
   fn update_banks(&mut self) {
     let prg_bank_mode = (self.registers.bank_select >> 6) & 0b1;
     let chr_mode = self.registers.bank_select >> 7;
-    let bank_select = self.registers.bank_select & 0b111;
 
-    match bank_select {
-      0 | 1 | 2 | 3 | 4 | 5 => self.update_chr_banks(chr_mode, bank_select),
-      6 | 7 => self.update_prg_banks(prg_bank_mode, bank_select),
-      _ => panic!("impossible")
-    }
+    self.update_prg_banks(prg_bank_mode);
+    self.update_chr_banks(chr_mode);
   }
 
   fn clock_irq(&mut self, address: u16) {
@@ -243,8 +197,9 @@ impl MapperActions for Txrom {
       0x8000..=0x9fff => {
         if address %2 == 0 {
           self.registers.bank_select = val;
+          self.update_banks();
         } else {
-          self.registers.bank_data = val;
+          self.registers.bank_data[(self.registers.bank_select & 0b111) as usize] = val;
           self.update_banks();
         }
         None
@@ -256,6 +211,7 @@ impl MapperActions for Txrom {
           } else {
             Mirroring::Horizontal
           };
+          self.update_banks();
         } else {
           // per https://www.nesdev.org/wiki/MMC3,
           // "Many emulators choose not to implement them as part of iNES Mapper 4 to avoid an incompatibility with the MMC6."
