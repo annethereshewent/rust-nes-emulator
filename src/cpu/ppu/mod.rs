@@ -469,7 +469,7 @@ impl PPU {
 
     let palette_index = palette[bg_color as usize];
 
-    let rgb = PALETTE_TABLE[palette_index as usize];
+    let rgb = PALETTE_TABLE[(palette_index as usize) % PALETTE_TABLE.len()];
 
     self.background_pixels_drawn.push(bg_color != 0);
 
