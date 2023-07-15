@@ -2,7 +2,6 @@ pub mod registers;
 pub mod picture;
 pub mod joypad;
 
-use std::cmp::Ordering;
 use std::thread::sleep;
 use std::time::{Duration, UNIX_EPOCH, SystemTime};
 
@@ -29,9 +28,6 @@ const MAX_FPS: u32 = 60;
 pub const FPS_INTERVAL: u32 =  1000 / MAX_FPS;
 
 const PRERENDER_SCANLINE: u16 = 261;
-
-const OAM_FETCH_START: u16 = 257;
-
 
 // per https://github.com/kamiyaowl/rust-nes-emulator/blob/master/src/ppu_palette_table.rs
 // const PALETTE_TABLE: [(u8,u8,u8); 64] = [
@@ -194,34 +190,6 @@ const PALETTE_TABLE: [(u8, u8, u8); 64] = [
 //   (0,0,0)
 // ];
 
-#[derive(Copy, Clone)]
-struct Sprite {
-  x: u8,
-  y: u8,
-  palette: [u8; 4],
-  sprite_behind_background: bool,
-  x_flip: bool,
-  y_flip: bool,
-  tile_high: u8,
-  tile_low: u8
-}
-
-
-impl Sprite {
-  pub fn new() -> Self {
-    Self {
-      x: 0,
-      y: 0,
-      palette: [0; 4],
-      sprite_behind_background: false,
-      x_flip: false,
-      y_flip: false,
-      tile_high: 0,
-      tile_low: 0
-    }
-  }
-}
-
 pub struct PPU {
   ctrl: ControlRegister,
   mask: MaskRegister,
@@ -251,16 +219,6 @@ pub struct PPU {
   tile_address: u16,
   oam_read: u8,
   secondary_oam_address: u8,
-  oam_n: u8,
-  oam_m: u8,
-  sprites: [Sprite; 8],
-  sprite_zero_found: bool,
-  sprite_in_range: bool,
-  sprite_zero_in_range: bool,
-  sprites_present: [bool; 256],
-  sprite_count: u8,
-  overflow_count: u8,
-  evaluation_done: bool,
   tile_shift_high: u16,
   tile_shift_low: u16,
   background_pixels_drawn: Vec<bool>
@@ -296,19 +254,9 @@ impl PPU {
       tile_high: 0,
       tile_address: 0,
       oam_read: 0,
-      oam_m: 0,
-      oam_n: 0,
       secondary_oam_address: 0,
-      sprites: [Sprite::new(); 8],
-      sprite_zero_found: false,
-      sprite_zero_in_range: false,
-      sprite_in_range: false,
-      sprites_present: [false; 256],
-      evaluation_done: false,
-      overflow_count: 0,
       tile_shift_high: 0,
       tile_shift_low: 0,
-      sprite_count: 0,
       background_pixels_drawn: Vec::new()
     }
   }
@@ -341,181 +289,6 @@ impl PPU {
       self.cycle();
     }
     self.cycles += 1;
-  }
-
-  fn evaluate_sprites(&mut self) {
-    match self.cycles {
-      1..=64 => {
-        // set secondary oam data to ff
-        self.secondary_oam.fill(0xff);
-        self.oam_read = 0xff;
-      }
-      65..=256 => {
-        if self.cycles == 65 {
-          self.sprite_in_range = false;
-          self.secondary_oam_address = 0;
-          self.oam_n = 0;
-          self.oam_m = 0;
-          self.sprite_zero_in_range = false;
-          self.evaluation_done = false;
-        } else if self.cycles == 256 {
-          self.sprite_zero_found = self.sprite_zero_in_range;
-          self.sprite_count = self.secondary_oam_address / 4;
-        }
-
-        if self.cycles % 2 == 1 {
-          self.oam_read = self.oam_data[(self.oam_n * 4 + self.oam_m) as usize];
-        } else {
-          if self.evaluation_done {
-            self.oam_n = (self.oam_n + 1) % 64;
-
-            if (self.secondary_oam_address as usize) >= self.secondary_oam.len() {
-              self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
-            }
-          } else {
-            if self.oam_m == 0 {
-              let y_coordinate = self.oam_read as u16;
-
-              let sprite_height = self.ctrl.sprite_size() as u16;
-
-              if (y_coordinate..y_coordinate + sprite_height).contains(&self.current_scanline) {
-                self.sprite_in_range = true;
-              }
-            }
-
-            // if 8 sprites haven't been found yet
-            if (self.secondary_oam_address as usize) < self.secondary_oam.len() {
-              self.secondary_oam[self.secondary_oam_address as usize] = self.oam_read;
-
-              if self.sprite_in_range {
-                self.oam_m += 1;
-                self.secondary_oam_address += 1;
-
-                if self.oam_n == 0 {
-                  self.sprite_zero_in_range = true;
-                }
-
-                if self.oam_m == 4 {
-                  self.sprite_in_range = false;
-
-                  self.oam_m = 0;
-                  self.oam_n = (self.oam_n + 1) % 64;
-
-                  if self.oam_n == 0 {
-                    self.evaluation_done = true;
-                  }
-                }
-              } else {
-                self.oam_n = (self.oam_n + 1) % 64;
-                if self.oam_n == 0 {
-                  self.evaluation_done = true;
-                }
-              }
-            } else {
-              self.oam_read = self.secondary_oam[self.secondary_oam_address as usize % self.secondary_oam.len()];
-
-              if self.sprite_in_range {
-                self.status.insert(StatusRegister::SPRITE_OVERFLOW);
-
-                self.oam_m += 1;
-
-                if self.oam_m == 4 {
-                  self.oam_m = 0;
-                  self.oam_n = (self.oam_n + 1) % 64;
-
-                  match self.overflow_count.cmp(&0) {
-                    Ordering::Equal => {
-                      self.overflow_count = 3;
-                    },
-                    Ordering::Greater => {
-                      self.overflow_count -= 1;
-                      if self.overflow_count == 0 {
-                        self.evaluation_done = true;
-                        self.oam_m = 0;
-                      }
-                    },
-                    Ordering::Less => ()
-                  }
-                }
-              } else {
-                self.oam_n = (self.oam_n + 1) % 64;
-                self.oam_m = (self.oam_m + 1) % 4;
-
-                if self.oam_n == 0 {
-                  self.evaluation_done = true;
-                }
-              }
-            }
-          }
-        }
-      },
-      _ => ()
-    }
-  }
-
-  fn fetch_sprites(&mut self) {
-    // this is actually an approximation but should be good enough
-   if (self.cycles % 8) == 4 {
-      let index = (self.cycles - OAM_FETCH_START) / 8;
-
-      let oam_index = index * 4;
-
-      let y = self.secondary_oam[oam_index as usize];
-      let mut tile_number = self.secondary_oam[(oam_index+1) as usize];
-      let attributes = self.secondary_oam[(oam_index+2) as usize];
-      let x = self.secondary_oam[(oam_index+3) as usize];
-
-      let palette_index = attributes & 0b11;
-
-      let palette = self.get_sprite_palette(palette_index);
-
-      let mut y_pos_in_tile = (self.current_scanline as i16) - (y as i16);
-
-      let y_flip = (attributes >> 7) & 0b1 == 1;
-      let x_flip = (attributes >> 6) & 0b1 == 1;
-
-      let sprite_behind_background = (attributes >> 5) & 0b1 == 1;
-
-      if y_flip {
-        y_pos_in_tile = self.ctrl.sprite_size() as i16 - 1 - y_pos_in_tile;
-      }
-
-      if y_pos_in_tile >= 0 && y_pos_in_tile < self.ctrl.sprite_size() as i16 {
-        let bank = if self.ctrl.sprite_size() == 8 {
-          self.ctrl.sprite_pattern_table_address()
-        } else {
-          let bank: u16 = if tile_number & 0b1 == 0 { 0 } else { 0x1000 };
-          tile_number = tile_number & 0b11111110;
-
-          if y_pos_in_tile > 7 {
-            y_pos_in_tile += 8;
-          }
-          bank
-        };
-
-        let tile_index = bank + tile_number as u16 * 16;
-
-        let tile_low = self.read_chr(tile_index + y_pos_in_tile as u16);
-        let tile_high = self.read_chr(tile_index + y_pos_in_tile as u16 + 8);
-
-        if index < self.sprite_count as u16 {
-          let mut sprite = &mut self.sprites[index as usize];
-
-          sprite.x_flip = x_flip;
-          sprite.y_flip = y_flip;
-          sprite.sprite_behind_background = sprite_behind_background;
-          sprite.tile_high = tile_high;
-          sprite.tile_low = tile_low;
-          sprite.palette = palette;
-          sprite.x = x;
-          sprite.y = y;
-
-          for spr in self.sprites_present.iter_mut().skip(sprite.x as usize).take(8) {
-            *spr = true;
-          }
-        }
-      }
-    }
   }
 
   fn fetch_attribute_byte(&mut self) {
@@ -630,13 +403,6 @@ impl PPU {
 
   fn cycle(&mut self) {
     if self.rendering_enabled() {
-      if self.current_scanline < SCREEN_HEIGHT {
-        // do sprite evaluation only for visible scanlines
-        if matches!(self.cycles, 1..=256) {
-          // self.evaluate_sprites()
-        }
-      }
-
       if self.current_scanline < SCREEN_HEIGHT || self.current_scanline == PRERENDER_SCANLINE {
         if matches!(self.cycles, 1..=256) || matches!(self.cycles, 321..=336) {
           // fetch nametable byte, attribute byte, pattern table high and low bytes
@@ -656,22 +422,10 @@ impl PPU {
         }
 
         match self.cycles {
-          // 1..=8 if self.current_scanline == PRERENDER_SCANLINE && self.oam_address >= 8 => {
-          //   let address = (self.cycles - 1) as usize;
-          //   self.oam_data[address] = self.oam_data[(self.oam_address as usize & 0xF8) + address]
-          // },
           256 => self.scroll.increment_y(),
           257 => self.scroll.copy_x(),
           280..=304 if self.current_scanline == PRERENDER_SCANLINE => self.scroll.copy_y(),
           _ => ()
-        }
-
-        if matches!(self.cycles, 257..=320) {
-          // fetch sprites for next scanline
-          if self.cycles == 257 {
-            self.sprites_present.fill(false);
-          }
-          // self.fetch_sprites();
         }
 
         if matches!(self.cycles, 321..=340) {
